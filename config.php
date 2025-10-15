@@ -1,0 +1,33 @@
+<?php
+/**
+ * Configuración del Sistema de Gestión de Ventas - INCOMERCIO
+ * Configuración completa para desarrollo y producción
+ */
+
+// Incluir el gestor de sesiones
+require_once 'includes/session_manager.php';
+
+// Configurar sesión única para este CRM
+$session_manager = getSessionManager('INCOMERCIO', 'INCOMERCIO_SID');
+
+// Configuración de zona horaria
+date_default_timezone_set('America/Bogota');
+
+// Constantes del proyecto
+define('SITE_NAME', 'Sistema de Ventas');
+define('SITE_VERSION', '2.2');
+define('UPLOAD_MAX_SIZE', 10 * 1024 * 1024); // 10MB
+define('ALLOWED_FILE_TYPES', ['xlsx', 'xls', 'csv']);
+
+// Configuración de base de datos
+define('DB_HOST', 'localhost');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+define('DB_NAME', 'yeimy');
+
+// Configuración de errores
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+ini_set('error_log', 'logs/error.log');
+?>
