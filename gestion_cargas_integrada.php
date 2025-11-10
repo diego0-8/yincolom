@@ -7,7 +7,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($page_title); ?></title>
+    <title><?php echo htmlspecialchars($page_title ?? 'Gestión de Cargas'); ?></title>
     <?php include 'views/shared_styles.php'; ?>
     <style>
         .upload-options {
@@ -356,7 +356,7 @@
     
     <div class="container">
         <div class="page-header">
-            <h1><?php echo htmlspecialchars($page_title); ?></h1>
+            <h1><?php echo htmlspecialchars($page_title ?? 'Gestión de Cargas'); ?></h1>
             <p class="page-description">Gestiona tus bases de datos de clientes subiendo archivos CSV</p>
         </div>
 
@@ -408,7 +408,6 @@
                     </h4>
                     <ol>
                         <li><span class="campo-obligatorio">cedula</span> - Número de cédula (sin puntos ni guiones)</li>
-                        <li><span class="campo-obligatorio">nombre</span> - <strong>Nombre completo del cliente</strong> (consolidado en un solo campo)</li>
                         <li><span class="campo-obligatorio">telefono</span> - Número de teléfono principal</li>
                         <li><span class="campo-obligatorio">obligacion</span> - Número de obligación financiera</li>
                     </ol>
@@ -418,6 +417,7 @@
                         Campos Opcionales (Información Básica)
                     </h4>
                     <ul>
+                        <li><span class="campo-opcional">nombre</span> - <strong>Nombre completo del cliente</strong> (consolidado en un solo campo)</li>
                         <li><span class="campo-opcional">celular2</span> - Número de celular secundario</li>
                         <li><span class="campo-opcional">email</span> - Correo electrónico</li>
                         <li><span class="campo-opcional">ciudad</span> - Ciudad de residencia</li>
@@ -446,8 +446,8 @@
                     </h4>
                     <div class="ejemplo-csv">
                         <div class="header">OBLIGACION;CEDULA;NOMBRE;Saldo K Obl;Capital Cliente;Pago Total Obl;Mora Actual;Propiedad;Producto;MEDICION;telefono;celular2;email;ciudad</div>
-                        <div class="row">1234567890;1014213070;ANA MILENA HINCAPIE GOMEZ;1500000.50;2000000.00;500000.00;30;FINANDINA;VEHICULO;10 SALDO <5MM;3124281457;3001234567;ana@email.com;Bogotá</div>
-                        <div class="row">9876543210;87654321;CARLOS LOPEZ RODRIGUEZ;2500000.75;3000000.00;750000.00;15;INCOMERCIO;LIBRE INVERSION;15 SALDO 5-10MM;3009876543;3007654321;carlos@email.com;Medellín</div>
+                        <div class="row">1234567890;1014213070;3124281457;ANA MILENA HINCAPIE GOMEZ;1500000.50;2000000.00;500000.00;30;FINANDINA;VEHICULO;10 SALDO <5MM;3001234567;ana@email.com;Bogotá</div>
+                        <div class="row">9876543210;87654321;3009876543;CARLOS LOPEZ RODRIGUEZ;2500000.75;3000000.00;750000.00;15;INCOMERCIO;LIBRE INVERSION;15 SALDO 5-10MM;3007654321;carlos@email.com;Medellín</div>
                     </div>
                     
                     <h4 style="margin-top: 20px;">
@@ -467,9 +467,9 @@
             <div class="notas-importantes">
                 <h5><i class="fas fa-exclamation-circle"></i> Notas Importantes</h5>
                 <ul>
-                    <li><strong>Campo "nombre":</strong> Debe contener el nombre completo del cliente. Si en tu base de datos tienes campos separados como "nombre" y "apellido", consolídalos en un solo campo "nombre".</li>
+                    <li><strong>Campo "nombre":</strong> Es opcional pero recomendado. Si está presente, debe contener el nombre completo del cliente. Si en tu base de datos tienes campos separados como "nombre" y "apellido", consolídalos en un solo campo "nombre".</li>
                     <li><strong>Campos financieros:</strong> Si están presentes en el CSV, se mostrarán automáticamente en la vista del asesor para gestionar el cliente.</li>
-                    <li><strong>Orden de campos:</strong> Aunque el orden puede variar, se recomienda seguir la secuencia: obligación, cédula, nombre, teléfono, y luego los campos opcionales.</li>
+                    <li><strong>Orden de campos:</strong> Aunque el orden puede variar, se recomienda seguir la secuencia: obligación, cédula, teléfono, y luego los campos opcionales (incluyendo nombre).</li>
                     <li><strong>Validación automática:</strong> El sistema detectará automáticamente los encabezados y mapeará los campos correctamente.</li>
                 </ul>
             </div>

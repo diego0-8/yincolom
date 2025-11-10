@@ -199,6 +199,7 @@ switch ($action) {
             if ($action === 'resultados_equipo') $controller->resultadosEquipo();
             if ($action === 'reportes_exportacion') $controller->reportesExportacion();
             if ($action === 'ver_clientes') $controller->verClientes();
+            if ($action === 'buscar_clientes') $controller->buscarClientes();
             if ($action === 'asignar_clientes') $controller->asignarClientesVista();
             if ($action === 'ver_gestion_asesor') $controller->verGestionAsesor();
             if ($action === 'get_asesores_disponibles') $controller->getAsesoresDisponibles();

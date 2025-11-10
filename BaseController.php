@@ -20,6 +20,7 @@ class BaseController {
     protected $tareaModel;
     protected $cargaExcelModel;
     protected $obligacionModel;
+    protected $sessionManager;
 
     public function __construct($pdo) {
         $this->pdo = $pdo;
@@ -29,13 +30,14 @@ class BaseController {
         $this->tareaModel = new TareaModel($pdo);
         $this->cargaExcelModel = new CargaExcelModel($pdo);
         $this->obligacionModel = new ObligacionModel($pdo);
+        $this->sessionManager = getSessionManager();
     }
 
     /**
      * Verifica si el usuario está autenticado
      */
     protected function verificarAutenticacion() {
-        if (!isset($_SESSION['user_id'])) {
+        if (!$this->sessionManager->isLoggedIn()) {
             header('Location: index.php?action=login');
             exit;
         }
@@ -46,7 +48,7 @@ class BaseController {
      */
     protected function verificarRol($rolRequerido) {
         $this->verificarAutenticacion();
-        if ($_SESSION['user_role'] !== $rolRequerido) {
+        if ($this->sessionManager->getUserRole() !== $rolRequerido) {
             header('Location: index.php?action=dashboard');
             exit;
         }
@@ -64,7 +66,7 @@ class BaseController {
      * Redirige con mensaje de éxito
      */
     protected function redirigirConExito($url, $mensaje) {
-        $_SESSION['success_message'] = $mensaje;
+        $this->sessionManager->set('success_message', $mensaje);
         header("Location: $url");
         exit;
     }
@@ -73,7 +75,7 @@ class BaseController {
      * Redirige con mensaje de error
      */
     protected function redirigirConError($url, $mensaje) {
-        $_SESSION['error_message'] = $mensaje;
+        $this->sessionManager->set('error_message', $mensaje);
         header("Location: $url");
         exit;
     }
@@ -83,11 +85,12 @@ class BaseController {
      */
     protected function obtenerMensajes() {
         $mensajes = [
-            'success' => $_SESSION['success_message'] ?? null,
-            'error' => $_SESSION['error_message'] ?? null
+            'success' => $this->sessionManager->get('success_message'),
+            'error' => $this->sessionManager->get('error_message')
         ];
         
-        unset($_SESSION['success_message'], $_SESSION['error_message']);
+        $this->sessionManager->remove('success_message');
+        $this->sessionManager->remove('error_message');
         return $mensajes;
     }
 

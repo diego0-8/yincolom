@@ -585,7 +585,13 @@
                     </div>
                 </div>
                 <div class="stat-number"><?php echo $datos_dashboard['total_clientes'] ?? 0; ?></div>
-                <div class="stat-description">Clientes asignados a tu portafolio</div>
+                <div class="stat-description">
+                    <?php if ($datos_dashboard['total_tareas_pendientes'] > 0): ?>
+                        Clientes en tareas asignadas
+                    <?php else: ?>
+                        Clientes gestionados
+                    <?php endif; ?>
+                </div>
             </div>
             
             <div class="stat-card-main">
@@ -596,7 +602,7 @@
                     </div>
                 </div>
                 <div class="stat-number"><?php echo $datos_dashboard['clientes_gestionados'] ?? 0; ?></div>
-                <div class="stat-description">Clientes que ya han sido contactados</div>
+                <div class="stat-description">Clientes contactados exitosamente</div>
             </div>
             
             <div class="stat-card-main">
@@ -607,29 +613,29 @@
                     </div>
                 </div>
                 <div class="stat-number"><?php echo $datos_dashboard['total_tareas_pendientes'] ?? 0; ?></div>
-                <div class="stat-description">Tareas asignadas por tu coordinador</div>
+                <div class="stat-description">Tareas pendientes por completar</div>
             </div>
             
             <div class="stat-card-main">
                 <div class="stat-header">
-                    <span class="stat-title">Clientes en Tareas</span>
+                    <span class="stat-title">Total Acuerdos</span>
                     <div class="stat-icon info">
-                        <i class="fas fa-list-check"></i>
+                        <i class="fas fa-handshake"></i>
                     </div>
                 </div>
-                <div class="stat-number"><?php echo $datos_dashboard['clientes_pendientes_tareas'] ?? 0; ?></div>
-                <div class="stat-description">Clientes pendientes de gestionar en tareas</div>
+                <div class="stat-number"><?php echo $datos_dashboard['total_acuerdos_pago'] ?? 0; ?></div>
+                <div class="stat-description">Acuerdos de pago realizados</div>
             </div>
             
             <div class="stat-card-main">
                 <div class="stat-header">
-                    <span class="stat-title">Total Recaudado</span>
+                    <span class="stat-title">Total Cuotas</span>
                     <div class="stat-icon purple">
-                        <i class="fas fa-dollar-sign"></i>
+                        <i class="fas fa-coins"></i>
                     </div>
                 </div>
-                <div class="stat-number">$<?php echo number_format($datos_dashboard['total_recaudado'] ?? 0, 0, ',', '.'); ?></div>
-                <div class="stat-description">Monto total de ventas realizadas</div>
+                <div class="stat-number">$<?php echo number_format($datos_dashboard['total_recaudado_acuerdos'] ?? 0, 0, ',', '.'); ?></div>
+                <div class="stat-description">Total de cuotas por acuerdos</div>
             </div>
         </div>
         
@@ -645,20 +651,20 @@
             <div class="section-content" id="content-rendimiento">
                 <div class="stats-grid-secondary">
                     <div class="stat-card-secondary">
-                        <div class="stat-number"><?php echo $metricas['ventas_exitosas'] ?? 0; ?></div>
-                        <div class="stat-description">Ventas Exitosas</div>
+                        <div class="stat-number"><?php echo $datos_dashboard['metricas_detalladas']['contactos_efectivos_periodo'] ?? 0; ?></div>
+                        <div class="stat-description">Contactos Exitosos (<?php echo ucfirst($datos_dashboard['periodo']); ?>)</div>
                     </div>
                     <div class="stat-card-secondary">
-                        <div class="stat-number"><?php echo $metricas['total_llamadas'] ?? 0; ?></div>
-                        <div class="stat-description">Total Llamadas</div>
+                        <div class="stat-number"><?php echo $datos_dashboard['metricas_detalladas']['gestiones_periodo'] ?? 0; ?></div>
+                        <div class="stat-description">Total Gestiones (<?php echo ucfirst($datos_dashboard['periodo']); ?>)</div>
                     </div>
                     <div class="stat-card-secondary">
-                        <div class="stat-number"><?php echo $metricas['tasa_conversion'] ?? 0; ?>%</div>
-                        <div class="stat-description">Tasa de Conversión</div>
-                    </div>
-                    <div class="stat-card-secondary">
-                        <div class="stat-number"><?php echo $metricas['tasa_contacto_efectivo'] ?? 0; ?>%</div>
+                        <div class="stat-number"><?php echo $datos_dashboard['metricas_detalladas']['tasa_contacto_efectivo'] ?? 0; ?>%</div>
                         <div class="stat-description">Tasa de Contacto</div>
+                    </div>
+                    <div class="stat-card-secondary">
+                        <div class="stat-number"><?php echo $datos_dashboard['metricas_detalladas']['seguimientos_agendados_periodo'] ?? 0; ?></div>
+                        <div class="stat-description">Seguimientos Agendados</div>
                     </div>
                 </div>
             </div>

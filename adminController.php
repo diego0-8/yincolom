@@ -11,8 +11,11 @@ class AdminController extends BaseController {
         $error = '';
         $success = '';
         
+        // Obtener el gestor de sesiones
+        $session_manager = getSessionManager();
+        
         // Si ya está logueado, redirigir al dashboard
-        if (isset($_SESSION['user_id'])) {
+        if ($session_manager->isLoggedIn()) {
             header('Location: index.php?action=dashboard');
             exit;
         }
@@ -30,11 +33,10 @@ class AdminController extends BaseController {
                 
                 if ($user) {
                     // Usuario autenticado correctamente
-                    $session_manager = getSessionManager();
                     $session_manager->login($user['id'], $user['rol'], $user['nombre_completo']);
                     
                     // Log de acceso exitoso
-                    error_log("Login exitoso - Usuario: {$usuario}, Rol: {$user['rol']}, ID: {$user['id']}");
+                    error_log("Login exitoso - Usuario: {$usuario}, Rol: {$user['rol']}, ID: {$user['id']}, Sesión: " . $session_manager->getSessionName());
                     
                     // Redirigir al dashboard correspondiente
                     header('Location: index.php?action=dashboard');

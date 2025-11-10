@@ -326,8 +326,8 @@ class CoordinadorController extends BaseController {
             error_log("Mapeo de columnas: " . json_encode($columnMap));
             
             // Verificar columnas obligatorias
-            if (!isset($columnMap['nombre']) || !isset($columnMap['cedula']) || !isset($columnMap['telefono'])) {
-                $error_message = "❌ Error en la carga: El archivo CSV debe contener al menos: Nombre, Cédula y Teléfono.<br><br>
+            if (!isset($columnMap['cedula']) || !isset($columnMap['telefono'])) {
+                $error_message = "❌ Error en la carga: El archivo CSV debe contener al menos: Cédula y Teléfono.<br><br>
                 <strong>Columnas encontradas:</strong><br>";
                 
                 if (!empty($headers)) {
@@ -336,7 +336,7 @@ class CoordinadorController extends BaseController {
                     $error_message .= "No se encontraron encabezados en el archivo.";
                 }
                 
-                $error_message .= "<br><br><strong>Columnas requeridas:</strong><br>• Nombre (o similar)<br>• Cédula/DNI (o similar)<br>• Teléfono (o similar)";
+                $error_message .= "<br><br><strong>Columnas requeridas:</strong><br>• Cédula/DNI (o similar)<br>• Teléfono (o similar)<br><br><strong>Columnas opcionales:</strong><br>• Nombre (o similar)<br>• Celular<br>• Email<br>• Dirección<br>• Ciudad";
                 
                 fclose($handle);
                 $page_title = "Subir Nuevo Archivo CSV";
@@ -348,7 +348,7 @@ class CoordinadorController extends BaseController {
             }
             
             // Verificar solo las columnas obligatorias
-            $columnasObligatorias = ['nombre', 'cedula', 'telefono'];
+            $columnasObligatorias = ['cedula', 'telefono'];
             $columnasFaltantes = [];
             
             foreach ($columnasObligatorias as $columna) {
@@ -358,7 +358,7 @@ class CoordinadorController extends BaseController {
             }
             
             if (!empty($columnasFaltantes)) {
-                $error_message = "❌ Error en la carga: El archivo CSV debe contener las columnas obligatorias: Nombre, Cédula y Teléfono.<br><br>
+                $error_message = "❌ Error en la carga: El archivo CSV debe contener las columnas obligatorias: Cédula y Teléfono.<br><br>
                 <strong>Columnas faltantes:</strong><br>• " . implode("<br>• ", $columnasFaltantes) . "<br><br>
                 <strong>Columnas encontradas:</strong><br>";
                 
@@ -366,8 +366,8 @@ class CoordinadorController extends BaseController {
                     $error_message .= "• " . implode("<br>• ", array_map('htmlspecialchars', $headers));
                 }
                 
-                $error_message .= "<br><br><strong>Columnas obligatorias:</strong><br>• Nombre (o similar)<br>• Cédula/DNI (o similar)<br>• Teléfono (o similar)<br><br>
-                <strong>Columnas opcionales (recomendadas):</strong><br>• Celular<br>• Email<br>• Dirección<br>• Ciudad";
+                $error_message .= "<br><br><strong>Columnas obligatorias:</strong><br>• Cédula/DNI (o similar)<br>• Teléfono (o similar)<br><br>
+                <strong>Columnas opcionales (recomendadas):</strong><br>• Nombre (o similar)<br>• Celular<br>• Email<br>• Dirección<br>• Ciudad";
                 
                 fclose($handle);
                 $page_title = "Subir Nuevo Archivo CSV";
@@ -410,7 +410,7 @@ class CoordinadorController extends BaseController {
                 
                 try {
                     // Verificar que las columnas obligatorias existan en el mapeo
-                    if (!isset($columnMap['nombre']) || !isset($columnMap['cedula']) || !isset($columnMap['telefono'])) {
+                    if (!isset($columnMap['cedula']) || !isset($columnMap['telefono'])) {
                         $errores++;
                         error_log("Error en fila {$rowNumber}: Columnas obligatorias no encontradas en el mapeo. Mapeo actual: " . json_encode($columnMap));
                         continue;
@@ -418,20 +418,20 @@ class CoordinadorController extends BaseController {
                     
                     // Extraer datos según el mapeo con validación
                     // Columnas obligatorias - deben tener contenido
-                    $nombre = isset($data[$columnMap['nombre']]) ? trim($data[$columnMap['nombre']]) : '';
                     $cedula = isset($data[$columnMap['cedula']]) ? trim($data[$columnMap['cedula']]) : '';
                     $telefono = isset($data[$columnMap['telefono']]) ? trim($data[$columnMap['telefono']]) : '';
                     
                     // Columnas opcionales - pueden estar vacías
+                    $nombre = (isset($columnMap['nombre']) && isset($data[$columnMap['nombre']])) ? trim($data[$columnMap['nombre']]) : '';
                     $celular = (isset($columnMap['celular']) && isset($data[$columnMap['celular']])) ? trim($data[$columnMap['celular']]) : '';
                     $email = (isset($columnMap['email']) && isset($data[$columnMap['email']])) ? trim($data[$columnMap['email']]) : '';
                     $direccion = (isset($columnMap['direccion']) && isset($data[$columnMap['direccion']])) ? trim($data[$columnMap['direccion']]) : '';
                     $ciudad = (isset($columnMap['ciudad']) && isset($data[$columnMap['ciudad']])) ? trim($data[$columnMap['ciudad']]) : '';
                     
                     // Validar datos obligatorios
-                    if (empty($nombre) || empty($cedula) || empty($telefono)) {
+                    if (empty($cedula) || empty($telefono)) {
                         $errores++;
-                        error_log("Error en fila {$rowNumber}: Datos obligatorios vacíos - Nombre: '{$nombre}', Cédula: '{$cedula}', Teléfono: '{$telefono}'");
+                        error_log("Error en fila {$rowNumber}: Datos obligatorios vacíos - Cédula: '{$cedula}', Teléfono: '{$telefono}'");
                         continue;
                     }
                     
@@ -441,8 +441,15 @@ class CoordinadorController extends BaseController {
                     if ($clienteExistente) {
                         // Cliente existe, verificar si ya está en esta carga
                         if (!$this->clienteModel->clienteYaEnCarga($clienteExistente['id'], $cargaId)) {
-                            // Agregar cliente existente a la carga
-                            $this->clienteModel->agregarClienteACarga($cargaId, $clienteExistente['id']);
+                            // Agregar cliente existente a la carga y actualizar información si es más completa
+                            $datosCliente = [
+                                'nombre' => $nombre,
+                                'telefono' => $telefono,
+                                'celular2' => $celular,
+                                'email' => $email,
+                                'ciudad' => $ciudad
+                            ];
+                            $this->clienteModel->agregarClienteACargaConActualizacion($cargaId, $clienteExistente['id'], $datosCliente);
                             $clientesAgregados++;
                         }
                         $clientesDuplicados++;
@@ -588,7 +595,7 @@ class CoordinadorController extends BaseController {
             // Leer cada línea de datos
             $linea = 2; // Empezar en línea 2 (después de encabezados)
             while (($data = fgetcsv($handle, 1000, $delimitador)) !== FALSE) {
-                if (count($data) >= 3) { // Mínimo nombre, cedula y teléfono
+                if (count($data) >= 2) { // Mínimo cedula y teléfono
                     $cliente = [
                         'obligacion' => trim($data[$indices['obligacion']] ?? ''),
                         'cedula' => trim($data[$indices['cedula']] ?? ''),
@@ -608,8 +615,8 @@ class CoordinadorController extends BaseController {
                         'linea' => $linea
                     ];
                     
-                    // Solo agregar si tiene datos mínimos
-                    if (!empty($cliente['nombre']) && !empty($cliente['cedula'])) {
+                    // Solo agregar si tiene datos mínimos (cedula y telefono)
+                    if (!empty($cliente['cedula']) && !empty($cliente['telefono'])) {
                         $clientes[] = $cliente;
                     }
                 }
@@ -779,7 +786,8 @@ class CoordinadorController extends BaseController {
                     $yaEnCarga = $this->clienteModel->clienteYaEnCarga($clienteExistente['id'], $cargaId);
                     
                     if (!$yaEnCarga) {
-                        $this->clienteModel->agregarClienteACarga($cargaId, $clienteExistente['id']);
+                        // Agregar cliente existente a la carga y actualizar información si es más completa
+                        $this->clienteModel->agregarClienteACargaConActualizacion($cargaId, $clienteExistente['id'], $grupo['info_cliente']);
                     }
                     
                     $clienteId = $clienteExistente['id'];
@@ -1265,6 +1273,7 @@ class CoordinadorController extends BaseController {
                 'Observaciones',
                 'Canales Autorizados',
                 'Valor Total (Producto)',
+                'Valor del Acuerdo (Acuerdo de Pago)',
                 'Total Cuotas (Acuerdo de Pago)',
                 'Fecha de Pago (Acuerdo de Pago)',
                 'Valor de Cuota (Acuerdo de Pago)',
@@ -1277,6 +1286,7 @@ class CoordinadorController extends BaseController {
                 'No hay datos para exportar en el período seleccionado',
                 'Período: ' . $fechaInicio . ' a ' . $fechaFin,
                 'Asesor: ' . $asesor['nombre_completo'],
+                '',
                 '',
                 '',
                 '',
@@ -1333,6 +1343,7 @@ class CoordinadorController extends BaseController {
             'Observaciones',
             'Canales Autorizados',
             'Valor Total (Producto)',
+            'Valor del Acuerdo (Acuerdo de Pago)',
             'Total Cuotas (Acuerdo de Pago)',
             'Fecha de Pago (Acuerdo de Pago)',
             'Valor de Cuota (Acuerdo de Pago)',
@@ -1359,10 +1370,11 @@ class CoordinadorController extends BaseController {
                 $this->limpiarDatoCSV($gestion['comentarios']),
                 $this->limpiarDatoCSV($gestion['canales_autorizados_texto']),
                 // Campos de acuerdo de pago - solo mostrar si es acuerdo de pago
-                $esAcuerdoPago ? $this->limpiarDatoCSV($gestion['valor_total'] ?? '') : '',
+                $esAcuerdoPago ? $this->formatearValorNumericoCSV($gestion['valor_total'] ?? '') : '',
+                $esAcuerdoPago ? $this->formatearValorNumericoCSV($gestion['valor_acuerdo'] ?? '') : '',
                 $esAcuerdoPago ? $this->limpiarDatoCSV($gestion['no_cuotas'] ?? '') : '',
                 $esAcuerdoPago ? $this->limpiarDatoCSV($gestion['fecha_pago'] ?? '') : '',
-                $esAcuerdoPago ? $this->limpiarDatoCSV($gestion['valor_cuota'] ?? '') : '',
+                $esAcuerdoPago ? $this->formatearValorNumericoCSV($gestion['valor_cuota'] ?? '') : '',
                 $esAcuerdoPago ? $this->limpiarDatoCSV($gestion['numero_cuota'] ?? '') : ''
             ];
             fputcsv($output, $row);
@@ -1454,6 +1466,7 @@ class CoordinadorController extends BaseController {
                 'Observaciones',
                 'Canales Autorizados',
                 'Valor Total (Producto)',
+                'Valor del Acuerdo (Acuerdo de Pago)',
                 'Total Cuotas (Acuerdo de Pago)',
                 'Fecha de Pago (Acuerdo de Pago)',
                 'Valor de Cuota (Acuerdo de Pago)',
@@ -1466,6 +1479,7 @@ class CoordinadorController extends BaseController {
                 'No hay asesores asignados para exportar',
                 'Período: ' . $fechaInicio . ' a ' . $fechaFin,
                 'Estado: Sin asesores asignados',
+                '',
                 '',
                 '',
                 '',
@@ -1520,6 +1534,7 @@ class CoordinadorController extends BaseController {
             'Observaciones',
             'Canales Autorizados',
             'Valor Total (Producto)',
+            'Valor del Acuerdo (Acuerdo de Pago)',
             'Total Cuotas (Acuerdo de Pago)',
             'Fecha de Pago (Acuerdo de Pago)',
             'Valor de Cuota (Acuerdo de Pago)',
@@ -1527,33 +1542,44 @@ class CoordinadorController extends BaseController {
         ];
         fputcsv($output, $headers);
         
-        // Datos de todas las gestiones con información de base de datos
+        // Obtener todas las gestiones de todos los asesores primero
+        $todasLasGestiones = [];
         foreach ($asesores as $asesor) {
             // Usar el método correcto que incluye tipificaciones de 2 y 3 nivel
             $gestiones = $this->gestionModel->getHistorialCompletoParaExportacion($asesor['id'], $fechaInicio, $fechaFin);
-
-            foreach ($gestiones as $gestion) {
-                $row = [
-                    $this->limpiarDatoCSV($gestion['fecha_gestion']),
-                    $this->limpiarDatoCSV($gestion['asesor_nombre'] ?? 'No asignado'),
-                    $this->limpiarDatoCSV($gestion['cedula']),
-                    $this->limpiarDatoCSV($gestion['cliente_nombre']),
-                    $this->limpiarDatoCSV($gestion['celular_cliente']),
-                    $this->limpiarDatoCSV($gestion['base_datos_nombre'] ?? 'No especificada'),
-                    $this->limpiarDatoCSV($gestion['forma_contacto'] ?? 'llamada'),
-                    $this->limpiarDatoCSV($gestion['tipificacion_2_nivel']),
-                    $this->limpiarDatoCSV($gestion['tipificacion_3_nivel']),
-                    $this->limpiarDatoCSV($gestion['obligacion_texto']),
-                    $this->limpiarDatoCSV($gestion['comentarios']),
-                    $this->limpiarDatoCSV($gestion['canales_autorizados_texto']),
-                    $this->limpiarDatoCSV($gestion['valor_total'] ?? ''),
-                    $this->limpiarDatoCSV($gestion['no_cuotas'] ?? ''),
-                    $this->limpiarDatoCSV($gestion['fecha_pago'] ?? ''),
-                    $this->limpiarDatoCSV($gestion['valor_cuota'] ?? ''),
-                    $this->limpiarDatoCSV($gestion['numero_cuota'] ?? '')
-                ];
-                fputcsv($output, $row);
-            }
+            $todasLasGestiones = array_merge($todasLasGestiones, $gestiones);
+        }
+        
+        // Ordenar todas las gestiones por fecha y hora de la más reciente a la más antigua
+        usort($todasLasGestiones, function($a, $b) {
+            $fechaA = strtotime($a['fecha_gestion']);
+            $fechaB = strtotime($b['fecha_gestion']);
+            return $fechaB - $fechaA; // Orden descendente (más reciente primero)
+        });
+        
+        // Escribir todas las gestiones ordenadas al CSV
+        foreach ($todasLasGestiones as $gestion) {
+            $row = [
+                $this->limpiarDatoCSV($gestion['fecha_gestion']),
+                $this->limpiarDatoCSV($gestion['asesor_nombre'] ?? 'No asignado'),
+                $this->limpiarDatoCSV($gestion['cedula']),
+                $this->limpiarDatoCSV($gestion['cliente_nombre']),
+                $this->limpiarDatoCSV($gestion['celular_cliente']),
+                $this->limpiarDatoCSV($gestion['base_datos_nombre'] ?? 'No especificada'),
+                $this->limpiarDatoCSV($gestion['forma_contacto'] ?? 'llamada'),
+                $this->limpiarDatoCSV($gestion['tipificacion_2_nivel']),
+                $this->limpiarDatoCSV($gestion['tipificacion_3_nivel']),
+                $this->limpiarDatoCSV($gestion['obligacion_texto']),
+                $this->limpiarDatoCSV($gestion['comentarios']),
+                $this->limpiarDatoCSV($gestion['canales_autorizados_texto']),
+                $this->formatearValorNumericoCSV($gestion['valor_total'] ?? ''),
+                $this->formatearValorNumericoCSV($gestion['valor_acuerdo'] ?? ''),
+                $this->limpiarDatoCSV($gestion['no_cuotas'] ?? ''),
+                $this->limpiarDatoCSV($gestion['fecha_pago'] ?? ''),
+                $this->formatearValorNumericoCSV($gestion['valor_cuota'] ?? ''),
+                $this->limpiarDatoCSV($gestion['numero_cuota'] ?? '')
+            ];
+            fputcsv($output, $row);
         }
         
         fclose($output);
@@ -2153,79 +2179,6 @@ class CoordinadorController extends BaseController {
         require 'views/coordinador_ver_clientes.php';
     }
 
-    /**
-     * Busca clientes por término de búsqueda (AJAX)
-     */
-    public function buscarClientes() {
-        // Limpiar cualquier salida previa
-        if (ob_get_level()) {
-            ob_clean();
-        }
-        
-        // Establecer headers para JSON solo si no se han enviado headers
-        if (!headers_sent()) {
-            header('Content-Type: application/json');
-        }
-        
-        try {
-            $coordinador_id = $_SESSION['user_id'] ?? null;
-            $carga_id = $this->getGet('carga_id');
-            $search_term = $this->getGet('search');
-            
-            // Log para debugging
-            error_log("buscarClientes - Coordinador ID: " . $coordinador_id);
-            error_log("buscarClientes - Carga ID: " . $carga_id);
-            error_log("buscarClientes - Search term: " . $search_term);
-            
-            if (!$coordinador_id) {
-                echo json_encode(['success' => false, 'error' => 'No hay sesión activa']);
-                return;
-            }
-            
-            if (!$carga_id) {
-                echo json_encode(['success' => false, 'error' => 'Carga no especificada']);
-                return;
-            }
-            
-            // Verificar que la carga pertenezca al coordinador
-            $carga = $this->cargaExcelModel->getCargaByIdAndCoordinador($carga_id, $coordinador_id);
-            if (!$carga) {
-                echo json_encode(['success' => false, 'error' => 'No tienes acceso a esta carga']);
-                return;
-            }
-            
-            // Buscar clientes
-            $clientes = $this->clienteModel->buscarClientesPorTermino($carga_id, $coordinador_id, $search_term);
-            
-            // Preparar datos para la respuesta
-            $resultados = [];
-            foreach ($clientes as $cliente) {
-                $resultados[] = [
-                    'id' => $cliente['id'],
-                    'nombre' => $cliente['nombre'] ?? 'N/A',
-                    'cedula' => $cliente['cedula'] ?? 'N/A',
-                    'telefono' => $cliente['telefono'] ?? 'N/A',
-                    'celular' => $cliente['celular2'] ?? 'N/A',
-                    'email' => $cliente['email'] ?? 'N/A',
-                    'estado' => isset($cliente['asesor_id']) && $cliente['asesor_id'] ? 'Asignado' : 'Pendiente'
-                ];
-            }
-            
-            $response = [
-                'success' => true,
-                'clientes' => $resultados,
-                'total' => count($resultados),
-                'termino' => $search_term
-            ];
-            
-            error_log("buscarClientes - Respuesta: " . json_encode($response));
-            echo json_encode($response);
-            
-        } catch (Exception $e) {
-            error_log("Error en buscarClientes: " . $e->getMessage());
-            echo json_encode(['success' => false, 'error' => 'Error interno del servidor']);
-        }
-    }
 
     /**
      * Muestra la vista para asignar clientes de una carga específica
@@ -2454,6 +2407,32 @@ class CoordinadorController extends BaseController {
         
         return $dato;
     }
+    
+    /**
+     * Formatea valores numéricos para exportación CSV sin decimales
+     * Convierte valores como 1259930.00 a 1259930
+     */
+    private function formatearValorNumericoCSV($valor) {
+        if ($valor === null || $valor === '') {
+            return '';
+        }
+        
+        // Verificar si el valor original es numérico
+        if (!is_numeric($valor)) {
+            return '';
+        }
+        
+        // Convertir a float para manejar strings numéricos
+        $valorFloat = floatval($valor);
+        
+        // Si el valor es 0 o es NaN, retornar vacío
+        if ($valorFloat == 0 || is_nan($valorFloat)) {
+            return '';
+        }
+        
+        // Convertir a entero (sin decimales) y luego a string
+        return (string) intval(round($valorFloat));
+    }
 
     public function crearNuevaBase() {
         $page_title = "Crear Nueva Base de Datos";
@@ -2529,7 +2508,7 @@ class CoordinadorController extends BaseController {
             }
             
             // Verificar columnas obligatorias
-            $columnasObligatorias = ['nombre', 'cedula', 'telefono'];
+            $columnasObligatorias = ['cedula', 'telefono'];
             $columnasFaltantes = [];
             
             foreach ($columnasObligatorias as $columna) {
@@ -2546,7 +2525,7 @@ class CoordinadorController extends BaseController {
             }
             
             if (!empty($columnasFaltantes)) {
-                $_SESSION['error_message'] = "❌ Error en la carga: El archivo CSV debe contener las columnas obligatorias: Nombre, Cédula y Teléfono.";
+                $_SESSION['error_message'] = "❌ Error en la carga: El archivo CSV debe contener las columnas obligatorias: Cédula y Teléfono.";
                 fclose($handle);
                 header('Location: index.php?action=gestion_cargas');
                 exit;
@@ -2877,7 +2856,7 @@ class CoordinadorController extends BaseController {
             }
             
             // Verificar columnas obligatorias
-            $columnasObligatorias = ['nombre', 'cedula', 'telefono'];
+            $columnasObligatorias = ['cedula', 'telefono'];
             $columnasFaltantes = [];
             
             foreach ($columnasObligatorias as $columna) {
@@ -2894,7 +2873,7 @@ class CoordinadorController extends BaseController {
             }
             
             if (!empty($columnasFaltantes)) {
-                $_SESSION['error_message'] = "❌ Error en la carga: El archivo CSV debe contener las columnas obligatorias: Nombre, Cédula y Teléfono.";
+                $_SESSION['error_message'] = "❌ Error en la carga: El archivo CSV debe contener las columnas obligatorias: Cédula y Teléfono.";
                 fclose($handle);
                 header('Location: index.php?action=gestion_cargas');
                 exit;
@@ -3434,6 +3413,67 @@ class CoordinadorController extends BaseController {
             echo json_encode(['success' => true, 'message' => 'Estado actualizado correctamente']);
         } else {
             echo json_encode(['error' => 'Error al actualizar el estado']);
+        }
+        exit;
+    }
+
+    /**
+     * Buscar clientes por término de búsqueda (AJAX)
+     */
+    public function buscarClientes() {
+        // Verificar que sea una petición AJAX
+        if (!isset($_SERVER['HTTP_X_REQUESTED_WITH']) || strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) !== 'xmlhttprequest') {
+            http_response_code(400);
+            echo json_encode(['error' => 'Petición no válida']);
+            exit;
+        }
+
+        $carga_id = $this->getGet('carga_id');
+        $search = $this->getGet('search');
+        $coordinador_id = $_SESSION['user_id'];
+
+        // Validar parámetros
+        if (!$carga_id || !$search) {
+            echo json_encode(['success' => false, 'error' => 'Faltan parámetros requeridos']);
+            exit;
+        }
+
+        // Verificar que la carga pertenece al coordinador
+        $carga = $this->cargaExcelModel->getCargaByIdAndCoordinador($carga_id, $coordinador_id);
+        if (!$carga) {
+            echo json_encode(['success' => false, 'error' => 'No tienes acceso a esta carga']);
+            exit;
+        }
+
+        try {
+            // Buscar clientes con el término de búsqueda
+            $clientes = $this->clienteModel->buscarClientesPorTermino($carga_id, $search, $coordinador_id);
+            
+            // Formatear los datos para la respuesta
+            $clientes_formateados = [];
+            foreach ($clientes as $cliente) {
+                $clientes_formateados[] = [
+                    'nombre' => $cliente['nombre'] ?? 'N/A',
+                    'cedula' => $cliente['cedula'] ?? 'N/A',
+                    'telefono' => $cliente['telefono'] ?? 'N/A',
+                    'celular' => $cliente['celular2'] ?? 'N/A',
+                    'email' => $cliente['email'] ?? 'N/A',
+                    'estado' => (isset($cliente['asesor_id']) && $cliente['asesor_id']) ? 'Asignado' : 'Pendiente'
+                ];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'clientes' => $clientes_formateados,
+                'total' => count($clientes_formateados)
+            ]);
+
+        } catch (Exception $e) {
+            error_log("Error en buscarClientes: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'error' => 'Error interno del servidor'
+            ]);
         }
         exit;
     }

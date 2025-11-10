@@ -54,6 +54,42 @@
         .cliente-meta {
             color: #6b7280;
             font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        
+        .cliente-meta-item {
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+        
+        /* Estilos para el desplegable de teléfonos */
+        .telefono-dropdown select {
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-left: 5px;
+            cursor: pointer;
+            outline: none;
+            font-weight: normal;
+            padding: 2px 5px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .telefono-dropdown select:hover {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+        
+        .telefono-dropdown select:focus {
+            background: rgba(102, 126, 234, 0.15);
+            color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
         }
         
         .tipificacion-card {
@@ -1687,6 +1723,273 @@
     echo getNavbar('Gestión de Cliente', $_SESSION['user_role'] ?? '');
     ?>
     
+    <!-- Botón de búsqueda integrado en el navbar (solo para asesores) -->
+    <?php if (($_SESSION['user_role'] ?? '') === 'asesor'): ?>
+    <style>
+        /* Agregar botón de búsqueda al menú del navbar */
+        .nav-menu .search-nav-item {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+        }
+        
+        .nav-menu .search-nav-item .search-nav-button {
+            background: #3b82f6;
+            color: white !important;
+            border: none;
+            width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+            margin-right: 15px;
+        }
+        
+        .nav-menu .search-nav-item .search-nav-button i {
+            color: white !important;
+            font-size: 17px !important;
+            text-shadow: none !important;
+        }
+        
+        .nav-menu .search-nav-item .search-nav-button:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
+        }
+        
+        .nav-menu .search-nav-item .search-nav-button:hover i {
+            color: white !important;
+        }
+        
+        .nav-menu .search-nav-item .search-nav-button.active {
+            background: #10b981;
+        }
+        
+        .nav-menu .search-nav-item .search-nav-button.active i {
+            color: white !important;
+        }
+    </style>
+    
+    <style>
+        /* Modal de búsqueda en navbar */
+        .search-overlay {
+            display: none;
+            position: fixed;
+            top: 55px;
+            right: 15px;
+            width: 450px;
+            max-width: 90vw;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            z-index: 1002;
+            padding: 20px;
+            animation: slideDown 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .search-overlay.active {
+            display: block;
+        }
+        
+        .search-overlay-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .search-overlay-header h3 {
+            margin: 0;
+            color: #1f2937;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .search-overlay-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #6b7280;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+        
+        .search-overlay-close:hover {
+            background: #f3f4f6;
+            color: #dc2626;
+        }
+        
+        .search-input-group-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .search-input-nav {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .search-input-nav:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .search-btn-nav {
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+        
+        .search-results-nav {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        
+        .search-result-item {
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #f8fafc;
+        }
+        
+        .search-result-item:hover {
+            background: #e7f3ff;
+            border-color: #3b82f6;
+            transform: translateY(-1px);
+        }
+        
+        .search-result-item h5 {
+            margin: 0 0 8px 0;
+            color: #1f2937;
+            font-size: 0.95rem;
+        }
+        
+        .search-result-item p {
+            margin: 4px 0;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        
+        .search-no-results {
+            text-align: center;
+            padding: 20px;
+            color: #6b7280;
+        }
+        
+        .search-loading {
+            text-align: center;
+            padding: 20px;
+            color: #6b7280;
+        }
+        
+        @media (max-width: 1024px) {
+            .search-overlay {
+                width: 90vw;
+                max-width: 400px;
+                right: 5vw;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .search-overlay {
+                width: 95vw;
+                right: 2.5vw;
+            }
+            
+            .nav-menu .search-nav-item .search-nav-button {
+                width: 35px;
+                height: 35px;
+                font-size: 14px;
+            }
+        }
+    </style>
+    
+    <script>
+        // Agregar botón de búsqueda al navbar dinámicamente
+        document.addEventListener('DOMContentLoaded', function() {
+            const navMenu = document.querySelector('.nav-menu');
+            if (navMenu) {
+                const searchButton = document.createElement('li');
+                searchButton.className = 'search-nav-item';
+                searchButton.innerHTML = `
+                    <button class="search-nav-button" onclick="toggleNavSearch()" title="Buscar Cliente">
+                        <i class="fas fa-search"></i>
+                    </button>
+                `;
+                navMenu.appendChild(searchButton);
+            }
+        });
+    </script>
+    
+    <!-- Modal de búsqueda en navbar -->
+    <div id="navSearchOverlay" class="search-overlay">
+        <div class="search-overlay-header">
+            <h3>
+                <i class="fas fa-search"></i> Buscar Cliente
+            </h3>
+            <button class="search-overlay-close" onclick="toggleNavSearch()">&times;</button>
+        </div>
+        
+        <form id="navSearchForm" onsubmit="navBuscarCliente(event)">
+            <div class="search-input-group-nav">
+                <input type="text" 
+                       id="navCedulaInput" 
+                       name="cedula" 
+                       placeholder="Ingresa la cédula..." 
+                       class="search-input-nav"
+                       required>
+                <button type="submit" class="btn btn-primary search-btn-nav">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
+        </form>
+        
+        <div id="navSearchResults" class="search-results-nav" style="display: none;">
+            <!-- Resultados se cargarán aquí -->
+        </div>
+    </div>
+    
+    <?php endif; ?>
+    
     <div class="gestion-container">
 
         <!-- Layout principal con Bootstrap -->
@@ -1703,12 +2006,31 @@
                         <div class="cliente-details">
                             <h2><?php echo htmlspecialchars($cliente['nombre'] ?? ''); ?></h2>
                             <div class="cliente-meta">
-                                <strong>Cédula:</strong> <?php echo htmlspecialchars($cliente['cedula'] ?? ''); ?> | 
-                                <strong>Teléfono:</strong> <?php echo htmlspecialchars($cliente['telefono'] ?? ''); ?>
+                                <span class="cliente-meta-item">
+                                    <strong>Cédula:</strong> <?php echo htmlspecialchars($cliente['cedula'] ?? ''); ?>
+                                </span>
+                                <span class="cliente-meta-item">|</span>
                                 
-                                <?php if (!empty($cliente['celular2'])): ?>
-                                    | <strong>Celular:</strong> <?php echo htmlspecialchars($cliente['celular2'] ?? ''); ?>
-                                    
+                                <!-- Desplegable para números de teléfono -->
+                                <span class="cliente-meta-item">
+                                    <div class="telefono-dropdown" style="display: inline-block; position: relative;">
+                                        <strong>Teléfono:</strong> 
+                                        <select id="telefonoSelect" onchange="actualizarTelefonoSeleccionado()">
+                                            <?php if (!empty($cliente['telefono'])): ?>
+                                                <option value="<?php echo htmlspecialchars($cliente['telefono']); ?>" data-tipo="Teléfono"><?php echo htmlspecialchars($cliente['telefono']); ?> (Teléfono)</option>
+                                            <?php endif; ?>
+                                            <?php if (!empty($cliente['celular2'])): ?>
+                                                <option value="<?php echo htmlspecialchars($cliente['celular2']); ?>" data-tipo="Celular" <?php echo empty($cliente['telefono']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cliente['celular2']); ?> (Celular)</option>
+                                            <?php endif; ?>
+                                        </select>
+                                    </div>
+                                </span>
+                                
+                                <?php if (!empty($cliente['email'])): ?>
+                                    <span class="cliente-meta-item">|</span>
+                                    <span class="cliente-meta-item">
+                                        <strong>Correo:</strong> <?php echo htmlspecialchars($cliente['email'] ?? ''); ?>
+                                    </span>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -1921,7 +2243,10 @@
                         
                         <!-- Selección de Obligación/Producto -->
                         <div class="form-group">
-                            <label for="obligacion_seleccionada" class="form-label">Obligación/Producto a Gestionar:</label>
+                            <label for="obligacion_seleccionada" class="form-label">
+                                Obligación/Producto a Gestionar:
+                                <span id="obligacion_required_indicator" style="display: none; color: #dc3545; font-weight: bold;">*</span>
+                            </label>
                             <select name="obligacion_seleccionada" id="obligacion_seleccionada" class="form-select" onchange="manejarSeleccionObligacion()">
                                 <option value="ninguna">Ninguna</option>
                                 <?php if (isset($obligaciones) && !empty($obligaciones)): ?>
@@ -1993,6 +2318,13 @@
                         <!-- Sección de Campos Específicos para Acuerdo de Pago -->
                         <div id="campos_acuerdo_pago" class="campos-especificos" style="display: none;">
                             <h4>💰 Información del Acuerdo de Pago</h4>
+                            <div class="form-group">
+                                <label for="valor_acuerdo" class="form-label">Valor del Acuerdo:</label>
+                                <input type="text" name="valor_acuerdo_display" id="valor_acuerdo" class="form-control" placeholder="Ej: $1.500.000" oninput="formatearPesosAcuerdo(this)" required>
+                                <input type="hidden" name="valor_acuerdo" id="valor_acuerdo_hidden">
+                                <small class="form-help">Ingrese el valor total del acuerdo de pago</small>
+                            </div>
+                            
                             <div class="form-group">
                                 <label for="no_cuotas" class="form-label">Número de Cuotas Totales:</label>
                                 <input type="number" name="no_cuotas" id="no_cuotas" class="form-control" min="1" max="60" placeholder="Ej: 12">
@@ -2232,10 +2564,23 @@
                  </div>
                  
                  <!-- Mostrar campos específicos de tipificación si existen -->
-                 <?php if (!empty($gestion['edad_cliente']) || !empty($gestion['num_personas']) || !empty($gestion['valor_cotizacion']) || !empty($gestion['no_cuotas']) || !empty($gestion['fecha_pago']) || !empty($gestion['valor_cuota']) || !empty($gestion['numero_cuota'])): ?>
+                 <?php 
+                 // Verificar si hay información básica de gestión (edad, personas, cotización, whatsapp)
+                 $tieneInfoBasica = !empty($gestion['edad_cliente']) || !empty($gestion['num_personas']) || !empty($gestion['valor_cotizacion']) || !empty($gestion['whatsapp_enviado']);
+                 
+                 // Verificar si hay información de acuerdo de pago (ignorar fechas inválidas y valores en cero)
+                 $tieneInfoAcuerdoPago = (!empty($gestion['no_cuotas']) && $gestion['no_cuotas'] > 0) || 
+                                        (!empty($gestion['fecha_pago']) && $gestion['fecha_pago'] !== '0000-00-00' && $gestion['fecha_pago'] !== '') || 
+                                        (!empty($gestion['valor_cuota']) && $gestion['valor_cuota'] > 0) || 
+                                        (!empty($gestion['numero_cuota']) && $gestion['numero_cuota'] > 0) ||
+                                        (!empty($gestion['valor_acuerdo']) && $gestion['valor_acuerdo'] > 0);
+                 
+                 if ($tieneInfoBasica || $tieneInfoAcuerdoPago): 
+                 ?>
                  <div class="historial-detalles">
                      <h5>📊 Detalles de la Gestión:</h5>
                      <div class="detalles-grid">
+                         <!-- Información básica de gestión -->
                          <?php if (!empty($gestion['edad_cliente'])): ?>
                          <div class="detalle-item">
                              <span class="detalle-label">👤 Edad:</span>
@@ -2257,7 +2602,19 @@
                          </div>
                          <?php endif; ?>
                          
-                         <!-- Campos específicos de acuerdo de pago -->
+                         <?php if (!empty($gestion['whatsapp_enviado'])): ?>
+                         <div class="detalle-item">
+                             <span class="detalle-label">📱 WhatsApp:</span>
+                             <span class="detalle-valor"><?php echo htmlspecialchars($gestion['whatsapp_enviado'] ?? ''); ?></span>
+                         </div>
+                         <?php endif; ?>
+                         
+                         <!-- Campos específicos de acuerdo de pago - solo mostrar si hay información de cuotas -->
+                         <?php if ($tieneInfoAcuerdoPago): ?>
+                         <div class="detalle-item" style="grid-column: 1 / -1; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                             <span class="detalle-label" style="font-weight: 600; color: #059669;">💳 Información de Acuerdo de Pago:</span>
+                         </div>
+                         
                          <?php if (!empty($gestion['no_cuotas'])): ?>
                          <div class="detalle-item">
                              <span class="detalle-label">📊 Total Cuotas:</span>
@@ -2286,11 +2643,12 @@
                          </div>
                          <?php endif; ?>
                          
-                         <?php if (!empty($gestion['whatsapp_enviado'])): ?>
+                         <?php if (!empty($gestion['valor_acuerdo'])): ?>
                          <div class="detalle-item">
-                             <span class="detalle-label">📱 WhatsApp:</span>
-                             <span class="detalle-valor"><?php echo htmlspecialchars($gestion['whatsapp_enviado'] ?? ''); ?></span>
+                             <span class="detalle-label">💰 Valor del Acuerdo:</span>
+                             <span class="detalle-valor">$<?php echo number_format($gestion['valor_acuerdo'], 0, ',', '.'); ?></span>
                          </div>
+                         <?php endif; ?>
                          <?php endif; ?>
                          
                          <?php if (!empty($gestion['monto_venta'])): ?>
@@ -2398,6 +2756,12 @@
             if (camposAcuerdoPago) {
                 camposAcuerdoPago.style.display = 'none';
                 // Limpiar y remover required de campos de acuerdo de pago
+                const valorAcuerdo = document.getElementById('valor_acuerdo');
+                if (valorAcuerdo) {
+                    valorAcuerdo.removeAttribute('required');
+                    valorAcuerdo.value = '';
+                }
+                
                 const camposObligatorios = ['no_cuotas', 'fecha_pago', 'valor_cuota', 'numero_cuota'];
                 camposObligatorios.forEach(campoId => {
                     const campo = document.getElementById(campoId);
@@ -2407,10 +2771,14 @@
                     }
                 });
                 
-                // Limpiar también el campo oculto de valor_cuota
+                // Limpiar también los campos ocultos
                 const valorCuotaHidden = document.getElementById('valor_cuota_hidden');
                 if (valorCuotaHidden) {
                     valorCuotaHidden.value = '';
+                }
+                const valorAcuerdoHidden = document.getElementById('valor_acuerdo_hidden');
+                if (valorAcuerdoHidden) {
+                    valorAcuerdoHidden.value = '';
                 }
             }
             // Acciones específicas removidas
@@ -2620,6 +2988,7 @@
         // Función para mostrar campos específicos según la tipificación seleccionada
         function mostrarCamposEspecificos(valor) {
             const camposAcuerdoPago = document.getElementById('campos_acuerdo_pago');
+            const obligacionSeleccionada = document.getElementById('obligacion_seleccionada');
             
             // Ocultar todos los campos específicos primero
             if (camposAcuerdoPago) {
@@ -2630,6 +2999,24 @@
             if (valor === '03' && camposAcuerdoPago) {
                 camposAcuerdoPago.style.display = 'block';
                 
+                // Hacer obligatorio el campo de obligación/producto
+                if (obligacionSeleccionada) {
+                    obligacionSeleccionada.setAttribute('required', 'required');
+                    // Agregar validación visual
+                    obligacionSeleccionada.style.borderColor = '#dc3545';
+                    // Mostrar indicador de obligatorio en el label
+                    const obligacionIndicator = document.getElementById('obligacion_required_indicator');
+                    if (obligacionIndicator) {
+                        obligacionIndicator.style.display = 'inline';
+                    }
+                }
+                
+                // Hacer obligatorio el campo de valor del acuerdo
+                const valorAcuerdo = document.getElementById('valor_acuerdo');
+                if (valorAcuerdo) {
+                    valorAcuerdo.setAttribute('required', 'required');
+                }
+                
                 // Hacer obligatorios los campos de acuerdo de pago
                 const camposObligatorios = ['no_cuotas', 'fecha_pago', 'valor_cuota', 'numero_cuota'];
                 camposObligatorios.forEach(campoId => {
@@ -2639,6 +3026,24 @@
                     }
                 });
             } else {
+                // Remover atributo required del campo de obligación/producto
+                if (obligacionSeleccionada) {
+                    obligacionSeleccionada.removeAttribute('required');
+                    obligacionSeleccionada.style.borderColor = '';
+                    // Ocultar indicador de obligatorio en el label
+                    const obligacionIndicator = document.getElementById('obligacion_required_indicator');
+                    if (obligacionIndicator) {
+                        obligacionIndicator.style.display = 'none';
+                    }
+                }
+                
+                // Remover atributo required del campo de valor del acuerdo
+                const valorAcuerdo = document.getElementById('valor_acuerdo');
+                if (valorAcuerdo) {
+                    valorAcuerdo.removeAttribute('required');
+                    valorAcuerdo.value = '';
+                }
+                
                 // Remover atributo required de los campos de acuerdo de pago si no se selecciona
                 const camposObligatorios = ['no_cuotas', 'fecha_pago', 'valor_cuota', 'numero_cuota'];
                 camposObligatorios.forEach(campoId => {
@@ -2649,10 +3054,14 @@
                     }
                 });
                 
-                // Limpiar también el campo oculto de valor_cuota
+                // Limpiar también los campos ocultos
                 const valorCuotaHidden = document.getElementById('valor_cuota_hidden');
                 if (valorCuotaHidden) {
                     valorCuotaHidden.value = '';
+                }
+                const valorAcuerdoHidden = document.getElementById('valor_acuerdo_hidden');
+                if (valorAcuerdoHidden) {
+                    valorAcuerdoHidden.value = '';
                 }
             }
         }
@@ -2759,6 +3168,37 @@
                     
                     if (!fecha || !motivo) {
                         alert('Para agendar nueva llamada, fecha y motivo son obligatorios.');
+                        return;
+                    }
+                }
+                
+                // Validación para Acuerdo de Pago (valor '03')
+                if (subTipificacionSeleccionada === '03') {
+                    // Validar que se haya seleccionado una obligación/producto
+                    const obligacionSeleccionada = document.getElementById('obligacion_seleccionada')?.value;
+                    if (!obligacionSeleccionada || obligacionSeleccionada === 'ninguna') {
+                        alert('Para acuerdos de pago, debe seleccionar una obligación/producto. No puede quedar como "Ninguna".');
+                        const obligacionSelect = document.getElementById('obligacion_seleccionada');
+                        if (obligacionSelect) {
+                            obligacionSelect.focus();
+                            obligacionSelect.style.borderColor = '#dc3545';
+                        }
+                        return;
+                    }
+                    
+                    const valorAcuerdo = document.getElementById('valor_acuerdo_hidden')?.value;
+                    const noCuotas = document.getElementById('no_cuotas')?.value;
+                    const fechaPago = document.getElementById('fecha_pago')?.value;
+                    const valorCuota = document.getElementById('valor_cuota_hidden')?.value;
+                    const numeroCuota = document.getElementById('numero_cuota')?.value;
+                    
+                    if (!valorAcuerdo) {
+                        alert('Para acuerdos de pago, el valor del acuerdo es obligatorio.');
+                        return;
+                    }
+                    
+                    if (!noCuotas || !fechaPago || !valorCuota || !numeroCuota) {
+                        alert('Para acuerdos de pago, todos los campos son obligatorios: número de cuotas, fecha de pago, valor de cuota y número de cuota.');
                         return;
                     }
                 }
@@ -2909,6 +3349,45 @@
              }
          }
          
+         // Función para formatear pesos colombianos del valor del acuerdo
+         function formatearPesosAcuerdo(input) {
+             // Remover todos los caracteres no numéricos
+             let valor = input.value.replace(/\D/g, '');
+             
+             // Si no hay valor, limpiar el campo
+             if (!valor) {
+                 input.value = '';
+                 // Limpiar también el campo oculto si existe
+                 const hiddenField = document.getElementById('valor_acuerdo_hidden');
+                 if (hiddenField) {
+                     hiddenField.value = '';
+                 }
+                 return;
+             }
+             
+             // Convertir a número y formatear
+             let numero = parseInt(valor);
+             if (isNaN(numero)) {
+                 input.value = '';
+                 // Limpiar también el campo oculto si existe
+                 const hiddenField = document.getElementById('valor_acuerdo_hidden');
+                 if (hiddenField) {
+                     hiddenField.value = '';
+                 }
+                 return;
+             }
+             
+             // Formatear con separadores de miles
+             let formateado = numero.toLocaleString('es-CO');
+             input.value = formateado;
+             
+             // Actualizar el campo oculto con el valor numérico
+             const hiddenField = document.getElementById('valor_acuerdo_hidden');
+             if (hiddenField) {
+                 hiddenField.value = numero;
+             }
+         }
+         
          // Función para guardar tipificación
 
         function guardarTipificacion() {
@@ -2974,14 +3453,38 @@
                  return;
              }
              
+             // Validación adicional para Acuerdo de Pago: debe seleccionar una obligación
+             if (subTipificacionSeleccionada === '03') {
+                 const obligacionSeleccionada = document.getElementById('obligacion_seleccionada')?.value;
+                 if (!obligacionSeleccionada || obligacionSeleccionada === 'ninguna') {
+                     alert('Para acuerdos de pago, debe seleccionar una obligación/producto. No puede quedar como "Ninguna".');
+                     const obligacionSelect = document.getElementById('obligacion_seleccionada');
+                     if (obligacionSelect) {
+                         obligacionSelect.focus();
+                         obligacionSelect.style.borderColor = '#dc3545';
+                         // Restaurar el color después de 3 segundos
+                         setTimeout(() => {
+                             if (obligacionSelect.style.borderColor === '#dc3545') {
+                                 obligacionSelect.style.borderColor = '';
+                             }
+                         }, 3000);
+                     }
+                     return;
+                 }
+             }
+             
             // Agregar valores al FormData
             formData.set('forma_contacto', formaContacto);
             formData.set('tipificacion', tipoGestion);
             formData.set('sub_tipificacion', subTipificacionSeleccionada);
             
-            // Agregar canales autorizados (pueden ser múltiples)
-            canalesAutorizados.forEach((canal, index) => {
-                formData.set(`canales_autorizados[${index}]`, canal);
+            // Agregar canales autorizados correctamente como array
+            // Eliminar cualquier entrada previa de canales
+            formData.delete('canales_autorizados');
+            
+            // Agregar cada canal individualmente (FormData manejará el array)
+            canalesAutorizados.forEach(canal => {
+                formData.append('canales_autorizados[]', canal);
             });
              
              // Agregar campos opcionales de información de pago si existen
@@ -3004,8 +3507,9 @@
              // Agregar campos específicos de acuerdo de pago si existen
              const noCuotas = document.getElementById('no_cuotas');
              const fechaPago = document.getElementById('fecha_pago');
-             const valorCuota = document.getElementById('valor_cuota');
+             const valorCuotaHidden = document.getElementById('valor_cuota_hidden');
              const numeroCuota = document.getElementById('numero_cuota');
+             const valorAcuerdo = document.getElementById('valor_acuerdo_hidden');
              
              if (noCuotas && noCuotas.value) {
                  formData.set('no_cuotas', noCuotas.value);
@@ -3015,12 +3519,16 @@
                  formData.set('fecha_pago', fechaPago.value);
              }
              
-             if (valorCuota && valorCuota.value) {
-                 formData.set('valor_cuota', valorCuota.value);
+             if (valorCuotaHidden && valorCuotaHidden.value) {
+                 formData.set('valor_cuota', valorCuotaHidden.value);
              }
              
              if (numeroCuota && numeroCuota.value) {
                  formData.set('numero_cuota', numeroCuota.value);
+             }
+             
+             if (valorAcuerdo && valorAcuerdo.value) {
+                 formData.set('valor_acuerdo', valorAcuerdo.value);
              }
              
              // Agregar campos opcionales de programar llamada si existen
@@ -3041,17 +3549,34 @@
                 body: formData,
                 credentials: 'same-origin'
             })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Respuesta del servidor:', data);
+            .then(response => {
+                // Verificar si la respuesta es realmente JSON
+                const contentType = response.headers.get('content-type');
+                
+                if (!contentType || !contentType.includes('application/json')) {
+                    // Si no es JSON, intentar leer como texto para diagnosticar
+                    return response.text().then(text => {
+                        console.error('❌ Servidor devolvió contenido no-JSON:');
+                        console.error('Content-Type:', contentType);
+                        console.error('Primeros 500 caracteres:', text.substring(0, 500));
+                        throw new Error('El servidor devolvió HTML en lugar de JSON. Revisa la consola del navegador.');
+                    });
+                }
+                
+                // Si es JSON, parsear
+                return response.json().then(data => ({response, data}));
+            })
+            .then(result => {
+                const data = result.data;
+                console.log('✅ Respuesta del servidor:', data);
                 
                 if (data.success) {
                     alert('✅ Tipificación guardada exitosamente');
                     
-            // Mostrar botones de navegación después del guardado
-            console.log('Mostrando botones de navegación...');
-            debugEstadoSistema();
-            mostrarBotonesNavegacion();
+                    // Mostrar botones de navegación después del guardado
+                    console.log('Mostrando botones de navegación...');
+                    debugEstadoSistema();
+                    mostrarBotonesNavegacion();
                     
                     // Limpiar formulario
                     document.getElementById('tipificacionForm').reset();
@@ -3059,16 +3584,14 @@
                     // Limpiar selecciones de tipificación
                     tipificacionSeleccionada = null;
                     subTipificacionSeleccionada = null;
-                    
-                    // Acciones específicas removidas
                 } else {
                     alert('❌ Error: ' + (data.message || 'No se pudo guardar la tipificación'));
                 }
             })
-             .catch(error => {
-                 console.error('❌ Error en fetch:', error);
-                 alert('❌ Error al guardar la tipificación: ' + error.message);
-             });
+            .catch(error => {
+                console.error('❌ Error en fetch:', error);
+                alert('❌ Error al guardar la tipificación: ' + error.message);
+            });
          }
          
          // Función para resetear el formulario para un nuevo cliente
@@ -3264,73 +3787,143 @@
                     </div>
                     
                     <!-- Detalles de la Gestión -->
-                    ${gestion.edad_cliente || gestion.num_personas || gestion.valor_cotizacion || gestion.whatsapp_enviado || gestion.monto_venta || gestion.duracion_llamada || gestion.no_cuotas || gestion.fecha_pago || gestion.valor_cuota || gestion.numero_cuota ? `
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-chart-bar"></i> Detalles de la Gestión</h4>
-                        <div class="detalle-grid">
-                            ${gestion.edad_cliente ? `
+                    ${(() => {
+                        // Verificar si hay información básica de gestión
+                        const tieneInfoBasica = gestion.edad_cliente || gestion.num_personas || gestion.valor_cotizacion || gestion.whatsapp_enviado || gestion.monto_venta || gestion.duracion_llamada;
+                        
+                        // Verificar si hay información de acuerdo de pago (ignorar fechas inválidas y valores en cero)
+                        const tieneInfoAcuerdoPago = (gestion.no_cuotas && gestion.no_cuotas > 0) || 
+                                                   (gestion.fecha_pago && gestion.fecha_pago !== '0000-00-00' && gestion.fecha_pago !== '') || 
+                                                   (gestion.valor_cuota && gestion.valor_cuota > 0) || 
+                                                   (gestion.numero_cuota && gestion.numero_cuota > 0) ||
+                                                   (gestion.valor_acuerdo && gestion.valor_acuerdo > 0);
+                        
+                        if (!tieneInfoBasica && !tieneInfoAcuerdoPago) {
+                            return '';
+                        }
+                        
+                        let html = `
+                        <div class="detalle-seccion">
+                            <h4><i class="fas fa-chart-bar"></i> Detalles de la Gestión</h4>
+                            <div class="detalle-grid">
+                        `;
+                        
+                        // Información básica de gestión
+                        if (gestion.edad_cliente) {
+                            html += `
                             <div class="detalle-item">
                                 <span class="detalle-label">👤 Edad del Cliente</span>
                                 <span class="detalle-valor">${gestion.edad_cliente} años</span>
                             </div>
-                            ` : ''}
-                            ${gestion.num_personas ? `
+                            `;
+                        }
+                        
+                        if (gestion.num_personas) {
+                            html += `
                             <div class="detalle-item">
                                 <span class="detalle-label">👥 Personas a Cubrir</span>
                                 <span class="detalle-valor">${gestion.num_personas}</span>
                             </div>
-                            ` : ''}
-                            ${gestion.valor_cotizacion ? `
+                            `;
+                        }
+                        
+                        if (gestion.valor_cotizacion) {
+                            html += `
                             <div class="detalle-item">
                                 <span class="detalle-label">💰 Valor de Cotización</span>
                                 <span class="detalle-valor">$${parseInt(gestion.valor_cotizacion).toLocaleString()}</span>
                             </div>
-                            ` : ''}
-                            ${gestion.no_cuotas ? `
+                            `;
+                        }
+                        
+                        if (gestion.whatsapp_enviado) {
+                            html += `
                             <div class="detalle-item">
-                                <span class="detalle-label">📊 Total Cuotas</span>
-                                <span class="detalle-valor">${gestion.no_cuotas}</span>
-                            </div>
-                            ` : ''}
-                            ${gestion.fecha_pago ? `
-                            <div class="detalle-item">
-                                <span class="detalle-label">📅 Fecha Pago</span>
-                                <span class="detalle-valor">${new Date(gestion.fecha_pago).toLocaleDateString('es-ES')}</span>
-                            </div>
-                            ` : ''}
-                            ${gestion.valor_cuota ? `
-                            <div class="detalle-item">
-                                <span class="detalle-label">💰 Valor Cuota</span>
-                                <span class="detalle-valor">$${parseFloat(gestion.valor_cuota).toLocaleString('es-CO')}</span>
-                            </div>
-                            ` : ''}
-                            ${gestion.numero_cuota ? `
-                            <div class="detalle-item">
-                                <span class="detalle-label">🔢 Número Cuota</span>
-                                <span class="detalle-valor">${gestion.numero_cuota}</span>
-                            </div>
-                            ` : ''}
-                            ${gestion.whatsapp_enviado ? `
-                            <div class="detalle-item">
-                                <span class="detalle-label">📱 WhatsApp Enviado</span>
+                                <span class="detalle-label">📱 WhatsApp</span>
                                 <span class="detalle-valor">${gestion.whatsapp_enviado}</span>
                             </div>
-                            ` : ''}
-                            ${gestion.monto_venta ? `
+                            `;
+                        }
+                        
+                        if (gestion.monto_venta) {
+                            html += `
                             <div class="detalle-item">
                                 <span class="detalle-label">💵 Monto de Venta</span>
                                 <span class="detalle-valor">$${parseInt(gestion.monto_venta).toLocaleString()}</span>
                             </div>
-                            ` : ''}
-                            ${gestion.duracion_llamada ? `
+                            `;
+                        }
+                        
+                        if (gestion.duracion_llamada) {
+                            html += `
                             <div class="detalle-item">
-                                <span class="detalle-label">⏱️ Duración de Llamada</span>
-                                <span class="detalle-valor">${gestion.duracion_llamada} minutos</span>
+                                <span class="detalle-label">⏱️ Duración</span>
+                                <span class="detalle-valor">${gestion.duracion_llamada} min</span>
                             </div>
-                            ` : ''}
+                            `;
+                        }
+                        
+                        // Campos específicos de acuerdo de pago - solo mostrar si hay información de cuotas
+                        if (tieneInfoAcuerdoPago) {
+                            html += `
+                            <div class="detalle-item" style="grid-column: 1 / -1; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                                <span class="detalle-label" style="font-weight: 600; color: #059669;">💳 Información de Acuerdo de Pago:</span>
+                            </div>
+                            `;
+                            
+                            if (gestion.no_cuotas) {
+                                html += `
+                                <div class="detalle-item">
+                                    <span class="detalle-label">📊 Total Cuotas</span>
+                                    <span class="detalle-valor">${gestion.no_cuotas}</span>
+                                </div>
+                                `;
+                            }
+                            
+                            if (gestion.fecha_pago) {
+                                html += `
+                                <div class="detalle-item">
+                                    <span class="detalle-label">📅 Fecha Pago</span>
+                                    <span class="detalle-valor">${new Date(gestion.fecha_pago).toLocaleDateString('es-ES')}</span>
+                                </div>
+                                `;
+                            }
+                            
+                            if (gestion.valor_cuota) {
+                                html += `
+                                <div class="detalle-item">
+                                    <span class="detalle-label">💰 Valor Cuota</span>
+                                    <span class="detalle-valor">$${parseFloat(gestion.valor_cuota).toLocaleString('es-CO')}</span>
+                                </div>
+                                `;
+                            }
+                            
+                            if (gestion.numero_cuota) {
+                                html += `
+                                <div class="detalle-item">
+                                    <span class="detalle-label">🔢 Número Cuota</span>
+                                    <span class="detalle-valor">${gestion.numero_cuota}</span>
+                                </div>
+                                `;
+                            }
+                            
+                            if (gestion.valor_acuerdo) {
+                                html += `
+                                <div class="detalle-item">
+                                    <span class="detalle-label">💰 Valor del Acuerdo</span>
+                                    <span class="detalle-valor">$${parseFloat(gestion.valor_acuerdo).toLocaleString('es-CO')}</span>
+                                </div>
+                                `;
+                            }
+                        }
+                        
+                        html += `
+                            </div>
                         </div>
-                    </div>
-                    ` : ''}
+                        `;
+                        
+                        return html;
+                    })()}
                     
                     <!-- Próxima Acción -->
                     ${gestion.proxima_accion || gestion.proxima_fecha ? `
@@ -3650,10 +4243,20 @@
             if (valorSeleccionado === 'ninguna') {
                 obligacionActual = null;
                 configurarBotonesSegunObligaciones();
+                
+                // Si el campo es requerido (acuerdo de pago), mantener el borde rojo
+                if (selectObligaciones.hasAttribute('required')) {
+                    selectObligaciones.style.borderColor = '#dc3545';
+                } else {
+                    selectObligaciones.style.borderColor = '';
+                }
             } else {
                 // Encontrar la obligación seleccionada
                 obligacionActual = obligacionesDisponibles.find(obl => obl.id === valorSeleccionado);
                 configurarBotonesSegunObligaciones();
+                
+                // Quitar el borde rojo si se seleccionó una obligación válida
+                selectObligaciones.style.borderColor = '';
             }
         }
         
@@ -3882,6 +4485,153 @@
             }, 5000);
         }
         
+        // Función para actualizar el teléfono seleccionado
+        function actualizarTelefonoSeleccionado() {
+            const select = document.getElementById('telefonoSelect');
+            const numeroSeleccionado = select.value;
+            const tipoSeleccionado = select.options[select.selectedIndex].getAttribute('data-tipo');
+            
+            console.log(`Teléfono seleccionado: ${numeroSeleccionado} (${tipoSeleccionado})`);
+            
+            // Aquí puedes agregar lógica adicional si necesitas hacer algo con el número seleccionado
+            // Por ejemplo, actualizar algún campo oculto o hacer una llamada
+        }
+        
+        // Función para hacer clic en el número de teléfono seleccionado
+        function llamarNumeroSeleccionado() {
+            const select = document.getElementById('telefonoSelect');
+            const numeroSeleccionado = select.value;
+            
+            if (numeroSeleccionado) {
+                llamarDesdeVentanaAnclada(numeroSeleccionado);
+            }
+        }
+        
+        // ===== FUNCIONES PARA EL BUSCADOR DEL NAVBAR =====
+        
+        // Función para toggle del buscador en navbar
+        function toggleNavSearch() {
+            const overlay = document.getElementById('navSearchOverlay');
+            const button = document.querySelector('.search-nav-button');
+            
+            if (overlay && button) {
+                if (overlay.classList.contains('active')) {
+                    overlay.classList.remove('active');
+                    button.classList.remove('active');
+                } else {
+                    overlay.classList.add('active');
+                    button.classList.add('active');
+                    document.getElementById('navCedulaInput').focus();
+                }
+            }
+        }
+        
+        // Función para buscar cliente desde el navbar
+        function navBuscarCliente(event) {
+            event.preventDefault();
+            
+            const cedula = document.getElementById('navCedulaInput').value.trim();
+            if (!cedula) {
+                mostrarExito('Por favor ingresa una cédula');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('navSearchResults');
+            
+            // Mostrar loading
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<div class="search-loading"><i class="fas fa-spinner fa-spin"></i> Buscando cliente...</div>';
+            
+            fetch(`index.php?action=buscar_cliente_por_cedula&cedula=${encodeURIComponent(cedula)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        mostrarNavResultados(data.clientes, cedula);
+                    } else {
+                        mostrarNavError(data.message || 'Error al buscar cliente');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    mostrarNavError('Error de conexión al buscar cliente');
+                });
+        }
+        
+        // Función para mostrar resultados en el navbar
+        function mostrarNavResultados(clientes, cedula) {
+            const resultsDiv = document.getElementById('navSearchResults');
+            
+            if (clientes.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="search-no-results">
+                        <i class="fas fa-search"></i>
+                        <p style="margin-top: 10px;">No se encontraron clientes con la cédula "${cedula}"</p>
+                        <small style="display: block; margin-top: 10px; color: #6b7280;">
+                            Asegúrate de tener acceso a la base de datos correspondiente.
+                        </small>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            clientes.forEach(cliente => {
+                html += `
+                    <div class="search-result-item" onclick="navSeleccionarCliente(${cliente.id})">
+                        <h5><i class="fas fa-user"></i> ${cliente.nombre || 'Sin nombre'}</h5>
+                        <p><strong>Cédula:</strong> ${cliente.cedula}</p>
+                        ${cliente.telefono ? `<p><strong>Teléfono:</strong> ${cliente.telefono}</p>` : ''}
+                        ${cliente.email ? `<p><strong>Email:</strong> ${cliente.email}</p>` : ''}
+                        <p style="color: #3b82f6; font-size: 0.75rem;"><i class="fas fa-database"></i> ${cliente.nombre_cargue || 'Base asignada'}</p>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        // Función para mostrar errores en el navbar
+        function mostrarNavError(mensaje) {
+            const resultsDiv = document.getElementById('navSearchResults');
+            resultsDiv.innerHTML = `
+                <div class="search-no-results">
+                    <i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i>
+                    <p style="margin-top: 10px; color: #dc2626;">${mensaje}</p>
+                </div>
+            `;
+        }
+        
+        // Función para seleccionar cliente desde el navbar
+        function navSeleccionarCliente(clienteId) {
+            // Redirigir a la vista de gestión de cliente
+            window.location.href = `index.php?action=gestionar_cliente&id=${clienteId}`;
+        }
+        
+        // Cerrar el modal de búsqueda al hacer clic fuera
+        document.addEventListener('DOMContentLoaded', function() {
+            // Cerrar modal al hacer clic fuera
+            document.addEventListener('click', function(event) {
+                const overlay = document.getElementById('navSearchOverlay');
+                const button = document.querySelector('.search-nav-button');
+                
+                if (overlay && button && !overlay.contains(event.target) && !button.contains(event.target)) {
+                    if (overlay.classList.contains('active')) {
+                        overlay.classList.remove('active');
+                        button.classList.remove('active');
+                    }
+                }
+            });
+            
+            // Permitir buscar con Enter
+            const navCedulaInput = document.getElementById('navCedulaInput');
+            if (navCedulaInput) {
+                navCedulaInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        document.getElementById('navSearchForm').dispatchEvent(new Event('submit'));
+                    }
+                });
+            }
+        });
          
     </script>
      
@@ -3900,7 +4650,7 @@
                          <select name="tipo_busqueda" id="tipo_busqueda" class="form-select" required>
                              <option value="">Seleccionar tipo...</option>
                              <option value="telefono">Número de Teléfono</option>
-                             <option value="cedula">Cédula de Identidad</option>
+                             <option value="cedula">Número de Cédula</option>
                          </select>
                      </div>
                      

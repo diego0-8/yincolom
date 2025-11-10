@@ -715,7 +715,7 @@
         }
         
         .close {
-            color: white;
+            color: red;
             font-size: 28px;
             font-weight: bold;
             cursor: pointer;
@@ -1696,7 +1696,6 @@
                             <th>Fecha Gestión</th>
                             <th>Monto Venta</th>
                             <th>Duración</th>
-                            <th>Observaciones</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -1732,7 +1731,6 @@
                         <td>${fechaGestion}</td>
                         <td>${montoVenta}</td>
                         <td>${duracion}</td>
-                        <td>${observaciones}${proximaLlamadaInfo}</td>
                         <td>
                             <button class="btn btn-sm btn-primary" onclick="mostrarObservaciones('${cliente.cliente_nombre || 'Cliente'}', '${observaciones.replace(/'/g, "\\'")}', '${proximaFecha}', '${proximaHora}')" title="Ver observaciones">
                                 👁️

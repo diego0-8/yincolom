@@ -353,5 +353,82 @@ class TareaModel {
         $stmt->execute([$cargaId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    /**
+     * MÉTODO OPTIMIZADO: Obtiene todos los clientes de tareas con métricas en una sola consulta
+     * Optimizado para manejar grandes volúmenes de datos (10k+ clientes)
+     * Compatible con versiones anteriores de MariaDB
+     */
+    public function getClientesTareasConMetricas($asesorId) {
+        // Primero obtener las tareas pendientes del asesor
+        $sqlTareas = "SELECT id, cliente_ids, descripcion, prioridad, fecha_creacion, carga_id 
+                      FROM tareas_asesor 
+                      WHERE asesor_id = ? AND estado = 'pendiente'";
+        
+        $stmtTareas = $this->pdo->prepare($sqlTareas);
+        $stmtTareas->execute([$asesorId]);
+        $tareas = $stmtTareas->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (empty($tareas)) {
+            return [];
+        }
+        
+        $clientesTareas = [];
+        
+        foreach ($tareas as $tarea) {
+            $clienteIds = json_decode($tarea['cliente_ids'], true);
+            
+            if (empty($clienteIds)) {
+                continue;
+            }
+            
+            // Crear placeholders para la consulta IN
+            $placeholders = str_repeat('?,', count($clienteIds) - 1) . '?';
+            
+            $sql = "SELECT 
+                        c.id,
+                        c.nombre,
+                        c.cedula,
+                        c.telefono,
+                        c.celular2,
+                        c.email,
+                        c.estado_cliente,
+                        ce.nombre_cargue,
+                        ? as tarea_id,
+                        ? as tarea_descripcion,
+                        ? as tarea_prioridad,
+                        COALESCE(COUNT(hg.id), 0) as total_gestiones,
+                        MAX(hg.fecha_gestion) as ultima_gestion,
+                        MAX(hg.resultado) as ultimo_resultado,
+                        COALESCE(SUM(hg.monto_venta), 0) as monto_venta
+                    FROM clientes c
+                    JOIN cargas_excel ce ON c.carga_excel_id = ce.id
+                    LEFT JOIN asignaciones_clientes ac ON ac.cliente_id = c.id AND ac.asesor_id = ?
+                    LEFT JOIN historial_gestion hg ON hg.asignacion_id = ac.id
+                    WHERE c.id IN ($placeholders)
+                    GROUP BY c.id
+                    ORDER BY c.nombre ASC";
+            
+            $stmt = $this->pdo->prepare($sql);
+            $params = array_merge(
+                [$tarea['id'], $tarea['descripcion'], $tarea['prioridad'], $asesorId],
+                $clienteIds
+            );
+            $stmt->execute($params);
+            
+            $clientesTarea = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $clientesTareas = array_merge($clientesTareas, $clientesTarea);
+        }
+        
+        // Ordenar por prioridad de tarea y nombre de cliente
+        usort($clientesTareas, function($a, $b) {
+            if ($a['tarea_prioridad'] == $b['tarea_prioridad']) {
+                return strcmp($a['nombre'], $b['nombre']);
+            }
+            return $b['tarea_prioridad'] - $a['tarea_prioridad'];
+        });
+        
+        return $clientesTareas;
+    }
 }
 ?>

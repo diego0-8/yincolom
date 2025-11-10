@@ -133,7 +133,7 @@ class ClienteModel {
      * Busca clientes por término de búsqueda en una carga específica
      * Optimizado para millones de registros
      */
-    public function buscarClientesPorTermino($cargaId, $coordinadorId, $searchTerm) {
+    public function buscarClientesPorTermino($cargaId, $searchTerm, $coordinadorId) {
         // Limpiar término de búsqueda
         $searchTerm = trim($searchTerm);
         if (empty($searchTerm)) {
@@ -513,6 +513,75 @@ class ClienteModel {
         $sql = "UPDATE clientes SET carga_excel_id = ? WHERE id = ?";
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([$cargaId, $clienteId]);
+    }
+
+    /**
+     * Agrega un cliente existente a una carga y actualiza su información si es más completa
+     */
+    public function agregarClienteACargaConActualizacion($cargaId, $clienteId, $nuevosDatos) {
+        $this->pdo->beginTransaction();
+        try {
+            // Obtener datos actuales del cliente
+            $sql = "SELECT * FROM clientes WHERE id = ?";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$clienteId]);
+            $clienteActual = $stmt->fetch();
+            
+            if (!$clienteActual) {
+                $this->pdo->rollBack();
+                return false;
+            }
+            
+            // Preparar datos para actualización
+            $camposActualizar = [];
+            $valores = [];
+            
+            // Verificar cada campo y actualizar si el nuevo dato es mejor
+            $campos = ['nombre', 'telefono', 'celular2', 'email', 'direccion', 'ciudad'];
+            
+            foreach ($campos as $campo) {
+                $valorActual = $clienteActual[$campo] ?? '';
+                $valorNuevo = $nuevosDatos[$campo] ?? '';
+                
+                // Actualizar si el campo actual está vacío y el nuevo no
+                if (empty($valorActual) && !empty($valorNuevo)) {
+                    $camposActualizar[] = "$campo = ?";
+                    $valores[] = $valorNuevo;
+                }
+                // O si el nuevo valor es más largo (más completo)
+                elseif (!empty($valorNuevo) && strlen($valorNuevo) > strlen($valorActual)) {
+                    $camposActualizar[] = "$campo = ?";
+                    $valores[] = $valorNuevo;
+                }
+            }
+            
+            // Agregar carga_excel_id
+            $camposActualizar[] = "carga_excel_id = ?";
+            $valores[] = $cargaId;
+            $valores[] = $clienteId;
+            
+            // Ejecutar actualización si hay campos para actualizar
+            if (count($camposActualizar) > 1) { // Más de 1 porque siempre incluimos carga_excel_id
+                $sql = "UPDATE clientes SET " . implode(', ', $camposActualizar) . " WHERE id = ?";
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute($valores);
+                
+                error_log("Cliente actualizado - ID: $clienteId, Campos: " . implode(', ', array_slice($camposActualizar, 0, -1)));
+            } else {
+                // Solo actualizar carga_excel_id
+                $sql = "UPDATE clientes SET carga_excel_id = ? WHERE id = ?";
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute([$cargaId, $clienteId]);
+            }
+            
+            $this->pdo->commit();
+            return true;
+            
+        } catch (Exception $e) {
+            $this->pdo->rollBack();
+            error_log("Error updating client: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**

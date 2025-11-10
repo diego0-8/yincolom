@@ -7,21 +7,26 @@ class GestionModel {
     }
 
     public function getGestionByAsesorAndCliente($asesorId, $clienteId) {
-        // Obtener historial completo del cliente para todos los asesores que tienen acceso
+        // Obtener historial completo del cliente visible para todos los asesores con acceso a la base
         $sql = "SELECT hg.id, hg.fecha_gestion, hg.tipo_gestion, hg.resultado, hg.comentarios, 
                        hg.monto_venta, hg.duracion_llamada, hg.edad, hg.num_personas, 
                        hg.valor_cotizacion, hg.whatsapp_enviado, hg.proxima_fecha, 
                        hg.forma_contacto, hg.obligacion_id, hg.producto_gestionado, 
                        hg.monto_obligacion, hg.numero_obligacion, hg.no_cuotas, 
-                       hg.fecha_pago, hg.valor_cuota, hg.numero_cuota,
+                       hg.fecha_pago, hg.valor_cuota, hg.numero_cuota, hg.valor_acuerdo,
                        u.nombre_completo as asesor_nombre, u.id as asesor_id
                 FROM historial_gestion hg 
                 JOIN asignaciones_clientes ac ON hg.asignacion_id = ac.id 
                 JOIN usuarios u ON ac.asesor_id = u.id
+                JOIN clientes c ON ac.cliente_id = c.id
                 WHERE ac.cliente_id = ? 
+                AND EXISTS (
+                    SELECT 1 FROM asignaciones_base_asesor aba 
+                    WHERE aba.asesor_id = ? AND aba.carga_id = c.carga_excel_id AND aba.estado = 'activa'
+                )
                 ORDER BY hg.fecha_gestion DESC";
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([$clienteId]);
+        $stmt->execute([$clienteId, $asesorId]);
         $gestiones = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         if (empty($gestiones)) {
@@ -66,10 +71,15 @@ class GestionModel {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function createGestion($asignacionId, $tipo, $comentarios, $resultado = null, $monto = null, $duracion = null, $edad = null, $numPersonas = null, $valorCotizacion = null, $whatsappEnviado = null, $formaContacto = 'llamada') {
-        $sql = "INSERT INTO historial_gestion (asignacion_id, fecha_gestion, tipo_gestion, comentarios, resultado, monto_venta, duracion_llamada, edad, num_personas, valor_cotizacion, whatsapp_enviado, forma_contacto) VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    public function createGestion($asignacionId, $tipo, $comentarios, $resultado = null, $monto = null, $duracion = null, $edad = null, $numPersonas = null, $valorCotizacion = null, $whatsappEnviado = null, $formaContacto = 'llamada', $obligacionId = null, $productoGestionado = null, $montoObligacion = null, $numeroObligacion = null, $noCuotas = null, $fechaPago = null, $valorCuota = null, $numeroCuota = null, $valorAcuerdo = null) {
+        $sql = "INSERT INTO historial_gestion (asignacion_id, fecha_gestion, tipo_gestion, comentarios, resultado, monto_venta, duracion_llamada, edad, num_personas, valor_cotizacion, whatsapp_enviado, forma_contacto, obligacion_id, producto_gestionado, monto_obligacion, numero_obligacion, no_cuotas, fecha_pago, valor_cuota, numero_cuota, valor_acuerdo) VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->pdo->prepare($sql);
-        return $stmt->execute([$asignacionId, $tipo, $comentarios, $resultado, $monto, $duracion, $edad, $numPersonas, $valorCotizacion, $whatsappEnviado, $formaContacto]);
+        $result = $stmt->execute([$asignacionId, $tipo, $comentarios, $resultado, $monto, $duracion, $edad, $numPersonas, $valorCotizacion, $whatsappEnviado, $formaContacto, $obligacionId, $productoGestionado, $montoObligacion, $numeroObligacion, $noCuotas, $fechaPago, $valorCuota, $numeroCuota, $valorAcuerdo]);
+        
+        if ($result) {
+            return $this->pdo->lastInsertId();
+        }
+        return false;
     }
     
     /**
@@ -468,6 +478,113 @@ class GestionModel {
         return $resultado['total_recaudado'] ?? 0;
     }
 
+    /**
+     * Obtiene el total de acuerdos de pago del día actual
+     */
+    public function getAcuerdosDelDia($asesorId) {
+        $sql = "SELECT COUNT(*) as acuerdos_dia
+                FROM historial_gestion hg 
+                JOIN asignaciones_clientes ac ON hg.asignacion_id = ac.id 
+                WHERE ac.asesor_id = ? 
+                AND hg.resultado = 'ACUERDO DE PAGO'
+                AND DATE(hg.fecha_gestion) = CURDATE()";
+        
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$asesorId]);
+        $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        return $resultado['acuerdos_dia'] ?? 0;
+    }
+
+    /**
+     * MÉTODO OPTIMIZADO: Obtiene todas las métricas del dashboard en una sola consulta
+     * Optimizado para manejar más de 10,000 clientes
+     */
+    public function getMetricasDashboardOptimizadas($asesorId, $periodo = 'dia') {
+        $fechaInicio = $this->getFechaInicio($periodo);
+        
+        // Consulta optimizada con índices y agregaciones eficientes
+        $sql = "SELECT 
+                    -- Clientes gestionados (únicos)
+                    COUNT(DISTINCT ac.cliente_id) as total_clientes_gestionados,
+                    
+                    -- Total recaudado
+                    COALESCE(SUM(hg.monto_venta), 0) as total_recaudado,
+                    
+                    -- Métricas por período
+                    COUNT(CASE WHEN hg.fecha_gestion >= ? THEN 1 END) as gestiones_periodo,
+                    COUNT(CASE WHEN hg.fecha_gestion >= ? AND hg.resultado IS NOT NULL THEN 1 END) as contactos_efectivos_periodo,
+                    
+                    -- Ventas por período
+                    COUNT(CASE WHEN hg.fecha_gestion >= ? AND hg.resultado IN ('Venta Exitosa', 'VENTA INGRESADA', 'Agendado', 'Interesado') THEN 1 END) as ventas_exitosas_periodo,
+                    COALESCE(SUM(CASE WHEN hg.fecha_gestion >= ? AND hg.monto_venta > 0 THEN hg.monto_venta END), 0) as total_ventas_periodo,
+                    
+                    -- Tipificaciones por período
+                    COUNT(CASE WHEN hg.fecha_gestion >= ? AND hg.resultado = 'VOLVER A LLAMAR' THEN 1 END) as seguimientos_agendados_periodo,
+                    COUNT(CASE WHEN hg.fecha_gestion >= ? AND hg.resultado IN ('No Contesta', 'Número Equivocado', 'Buzón de Voz') THEN 1 END) as contactos_no_efectivos_periodo,
+                    
+                    -- Tiempo promedio
+                    AVG(CASE WHEN hg.fecha_gestion >= ? AND hg.duracion_llamada > 0 THEN hg.duracion_llamada END) as tiempo_promedio_periodo
+                    
+                FROM historial_gestion hg 
+                JOIN asignaciones_clientes ac ON hg.asignacion_id = ac.id 
+                WHERE ac.asesor_id = ?";
+        
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            $fechaInicio, $fechaInicio, $fechaInicio, $fechaInicio, 
+            $fechaInicio, $fechaInicio, $fechaInicio, $asesorId
+        ]);
+        
+        $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Agregar métricas calculadas
+        $resultado['tasa_contacto_efectivo'] = $resultado['gestiones_periodo'] > 0 
+            ? round(($resultado['contactos_efectivos_periodo'] / $resultado['gestiones_periodo']) * 100, 2) 
+            : 0;
+            
+        $resultado['tasa_ventas'] = $resultado['contactos_efectivos_periodo'] > 0 
+            ? round(($resultado['ventas_exitosas_periodo'] / $resultado['contactos_efectivos_periodo']) * 100, 2) 
+            : 0;
+        
+        return $resultado;
+    }
+
+    /**
+     * Obtiene el total de acuerdos de pago realizados por un asesor
+     */
+    public function getTotalAcuerdosPago($asesorId) {
+        $sql = "SELECT COUNT(*) as total_acuerdos
+                FROM historial_gestion hg 
+                JOIN asignaciones_clientes ac ON hg.asignacion_id = ac.id 
+                WHERE ac.asesor_id = ? 
+                AND hg.resultado = 'ACUERDO DE PAGO'";
+        
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$asesorId]);
+        $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        return $resultado['total_acuerdos'] ?? 0;
+    }
+
+    /**
+     * Obtiene el total recaudado por acuerdos de pago (valor de cuotas)
+     */
+    public function getTotalRecaudadoAcuerdos($asesorId) {
+        $sql = "SELECT COALESCE(SUM(hg.valor_cuota), 0) as total_recaudado_acuerdos
+                FROM historial_gestion hg 
+                JOIN asignaciones_clientes ac ON hg.asignacion_id = ac.id 
+                WHERE ac.asesor_id = ? 
+                AND hg.resultado = 'ACUERDO DE PAGO'
+                AND hg.valor_cuota > 0";
+        
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$asesorId]);
+        $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        return $resultado['total_recaudado_acuerdos'] ?? 0;
+    }
+
     public function getEstadisticasPorTipoVenta($asesorId, $periodo = 'dia') {
         $fechaInicio = $this->getFechaInicio($periodo);
         
@@ -772,8 +889,8 @@ class GestionModel {
                         monto_venta, duracion_llamada, edad, num_personas, 
                         valor_cotizacion, whatsapp_enviado, proxima_fecha, forma_contacto,
                         obligacion_id, producto_gestionado, monto_obligacion, numero_obligacion,
-                        no_cuotas, fecha_pago, valor_cuota, numero_cuota, valor_total
-                    ) VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        no_cuotas, fecha_pago, valor_cuota, numero_cuota, valor_total, valor_acuerdo
+                    ) VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
             $stmt = $this->pdo->prepare($sql);
             
@@ -799,7 +916,8 @@ class GestionModel {
                 $gestionData['fecha_pago'] ?? null,
                 $gestionData['valor_cuota'] ?? null,
                 $gestionData['numero_cuota'] ?? null,
-                $gestionData['valor_total'] ?? null
+                $gestionData['valor_total'] ?? null,
+                $gestionData['valor_acuerdo'] ?? null
             ];
             
             // Ejecutar la consulta
@@ -1345,6 +1463,7 @@ class GestionModel {
                         hg.fecha_pago,
                         hg.valor_cuota,
                         hg.numero_cuota,
+                        hg.valor_acuerdo,
                         COALESCE(hg.valor_total, o.saldo_k_obligacion) as valor_total,
                         o.obligacion as numero_obligacion_tabla,
                         o.producto as producto_obligacion,

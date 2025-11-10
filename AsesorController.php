@@ -17,47 +17,45 @@ class AsesorController extends BaseController {
         // Obtener período seleccionado (día, semana, mes)
         $periodo = $_GET['periodo'] ?? 'dia';
         
-        // Obtener métricas del dashboard para el período seleccionado
-        $metricas = $this->gestionModel->getMetricasDashboard($asesor_id, $periodo);
-        $tipificaciones = $this->gestionModel->getTipificacionesPorResultado($asesor_id, $periodo);
-        $gestionesPorDia = $this->gestionModel->getGestionesPorDia($asesor_id, $periodo);
+        // OPTIMIZACIÓN: Obtener todas las métricas en una sola consulta optimizada
+        $metricasCompletas = $this->gestionModel->getMetricasDashboardOptimizadas($asesor_id, $periodo);
         
-        // Obtener estadísticas de tareas pendientes
+        // Obtener estadísticas de tareas pendientes (optimizado)
         $tareasPendientes = $this->tareaModel->getTareasPendientesByAsesor($asesor_id);
         $totalTareasPendientes = count($tareasPendientes);
         
-        // Calcular clientes pendientes de tareas
-        $clientesPendientesTareas = 0;
-        foreach ($tareasPendientes as $tarea) {
-            $clientesPendientesTareas += count($tarea['cliente_ids']);
+        // Calcular total de clientes en tareas (optimizado)
+        $totalClientesEnTareas = 0;
+        if (!empty($tareasPendientes)) {
+            $totalClientesEnTareas = array_sum(array_map(function($tarea) {
+                return count($tarea['cliente_ids'] ?? []);
+            }, $tareasPendientes));
         }
         
-        // Obtener datos de seguimiento y últimas gestiones (sin filtro de fecha)
-        $clientesSeguimiento = $this->gestionModel->getClientesConSeguimiento($asesor_id);
-        $ultimasGestiones = $this->gestionModel->getUltimasGestiones($asesor_id, 5);
+        // Obtener métricas de acuerdos de pago (NUEVA MÉTRICA)
+        $acuerdosPago = $this->gestionModel->getTotalAcuerdosPago($asesor_id);
+        $totalRecaudadoAcuerdos = $this->gestionModel->getTotalRecaudadoAcuerdos($asesor_id);
         
-        // Obtener clientes con tipificación "volver a llamar" para el día actual
+        // Obtener datos de seguimiento (optimizado - solo los necesarios)
         $llamadasPendientes = $this->gestionModel->getLlamadasPendientesHoy($asesor_id);
-        $totalLlamadasPendientesHoy = $this->gestionModel->getTotalLlamadasPendientesHoy($asesor_id);
+        $totalLlamadasPendientesHoy = count($llamadasPendientes);
         
-        // Obtener clientes asignados para las tarjetas de resumen
-        $clientes = $this->clienteModel->getAssignedClientsForAsesor($asesor_id);
-        $total_clientes = count($clientes);
+        // Determinar el total de clientes real
+        $total_clientes = $totalClientesEnTareas > 0 ? $totalClientesEnTareas : $metricasCompletas['total_clientes_gestionados'];
         
-        // Obtener métricas REALES del asesor (no solo asignaciones)
-        $clientes_gestionados = $this->gestionModel->getClientesGestionados($asesor_id);
-        $total_recaudado = $this->gestionModel->getTotalRecaudado($asesor_id);
-        
-        // Datos adicionales para el dashboard
+        // Datos optimizados para el dashboard
         $datos_dashboard = [
             'total_clientes' => $total_clientes,
-            'clientes_gestionados' => $clientes_gestionados,
-            'total_recaudado' => $total_recaudado,
+            'clientes_gestionados' => $metricasCompletas['total_clientes_gestionados'],
+            'total_recaudado' => $metricasCompletas['total_recaudado'],
+            'total_acuerdos_pago' => $acuerdosPago,
+            'total_recaudado_acuerdos' => $totalRecaudadoAcuerdos,
             'periodo' => $periodo,
             'llamadas_pendientes' => $llamadasPendientes,
             'total_llamadas_pendientes_hoy' => $totalLlamadasPendientesHoy,
             'total_tareas_pendientes' => $totalTareasPendientes,
-            'clientes_pendientes_tareas' => $clientesPendientesTareas
+            'clientes_pendientes_tareas' => $totalClientesEnTareas,
+            'metricas_detalladas' => $metricasCompletas
         ];
 
         require 'views/asesor_dashboard.php';
@@ -67,29 +65,12 @@ class AsesorController extends BaseController {
         $page_title = "Mis Clientes";
         $asesorId = $_SESSION['user_id'];
         
-        // Verificar si el asesor tiene tareas pendientes
+        // OPTIMIZACIÓN: Verificar tareas de forma más eficiente
         $tieneTareasPendientes = $this->tareaModel->tieneTareasPendientes($asesorId);
         
         if ($tieneTareasPendientes) {
-            // Si tiene tareas pendientes, mostrar solo los clientes de las tareas
-            $tareasPendientes = $this->tareaModel->getTareasPendientesByAsesor($asesorId);
-            $clientesTareas = [];
-            
-            foreach ($tareasPendientes as $tarea) {
-                $clientesTarea = $this->tareaModel->getClientesByTarea($tarea['id']);
-                foreach ($clientesTarea as $cliente) {
-                    // Calcular total de gestiones para este cliente
-                    $totalGestiones = $this->gestionModel->getTotalGestionesByAsesorAndCliente($asesorId, $cliente['id']);
-                    
-                    $cliente['tarea_id'] = $tarea['id'];
-                    $cliente['tarea_descripcion'] = $tarea['descripcion'];
-                    $cliente['tarea_prioridad'] = $tarea['prioridad'];
-                    $cliente['total_gestiones'] = $totalGestiones;
-                    $clientesTareas[] = $cliente;
-                }
-            }
-            
-            $todosClientes = $clientesTareas;
+            // OPTIMIZACIÓN: Obtener todos los datos en una sola consulta
+            $todosClientes = $this->tareaModel->getClientesTareasConMetricas($asesorId);
         } else {
             // Si no tiene tareas pendientes, mostrar mensaje de "No tienes tareas pendientes"
             $todosClientes = [];
@@ -437,15 +418,48 @@ class AsesorController extends BaseController {
                 'valor_cotizacion' => $_POST['valor_cotizacion'] ?? null,
                 'whatsapp_enviado' => $_POST['whatsapp_enviado'] ?? null,
                 'monto_venta' => ($sub_tipificacion === 'VENTA INGRESADA') ? ($_POST['monto_venta'] ?? null) : null,
-                'proxima_fecha' => $fecha_nueva_llamada
+                'proxima_fecha' => $fecha_nueva_llamada,
+                'duracion_llamada' => $_POST['duracion_llamada'] ?? null,
+                'forma_contacto' => $_POST['forma_contacto'] ?? 'llamada'
             ];
             
-            $gestionId = $this->gestionModel->crearGestion($gestionData);
+            // Obtener campos de cuotas si están disponibles
+            $noCuotas = $_POST['no_cuotas'] ?? null;
+            $fechaPago = $_POST['fecha_pago'] ?? null;
+            $valorCuota = $_POST['valor_cuota'] ?? null;
+            $numeroCuota = $_POST['numero_cuota'] ?? null;
+            
+            // Procesar valor de cuota si está presente
+            if ($valorCuota) {
+                $valorCuota = (float) str_replace(['.', ','], '', $valorCuota);
+            }
+            
+            $gestionId = $this->gestionModel->createGestion(
+                $gestionData['asignacion_id'],
+                $gestionData['tipo_gestion'],
+                $gestionData['comentarios'],
+                $gestionData['resultado'],
+                $gestionData['monto_venta'],
+                $gestionData['duracion_llamada'],
+                $gestionData['edad'],
+                $gestionData['num_personas'],
+                $gestionData['valor_cotizacion'],
+                $gestionData['whatsapp_enviado'],
+                $gestionData['forma_contacto'],
+                null, // obligacion_id
+                null, // producto_gestionado
+                null, // monto_obligacion
+                null, // numero_obligacion
+                $noCuotas,
+                $fechaPago,
+                $valorCuota,
+                $numeroCuota
+            );
             
             if ($gestionId) {
-                            // Actualizar estado del cliente según la tipificación
-            $nuevoEstado = $this->determinarNuevoEstadoCliente($sub_tipificacion);
-            $this->clienteModel->actualizarCliente($clienteId, ['estado_cliente' => $nuevoEstado]);
+                // Actualizar estado del cliente según la tipificación
+                $nuevoEstado = $this->determinarNuevoEstadoCliente($sub_tipificacion);
+                $this->clienteModel->actualizarCliente($clienteId, ['estado_cliente' => $nuevoEstado]);
                 
                 $_SESSION['success_message'] = "Gestión guardada exitosamente. El cliente ha sido marcado como: " . $nuevoEstado;
                 
@@ -476,8 +490,8 @@ class AsesorController extends BaseController {
             $asesorId = $_SESSION['user_id'];
             
             // Validar campos obligatorios
-            if (empty($_POST['nuevo_nombre']) || empty($_POST['nuevo_cedula']) || empty($_POST['nuevo_telefono'])) {
-                throw new Exception("Los campos Nombre, Cédula y Teléfono son obligatorios.");
+            if (empty($_POST['nuevo_cedula']) || empty($_POST['nuevo_telefono'])) {
+                throw new Exception("Los campos Cédula y Teléfono son obligatorios.");
             }
             
             // Preparar datos del cliente
@@ -509,7 +523,15 @@ class AsesorController extends BaseController {
                     'estado' => 'Completada'
                 ];
                 
-                $this->gestionModel->crearGestion($gestionData);
+                // Crear asignación temporal para el cliente nuevo
+                $asignacionId = $this->clienteModel->createTemporaryAsignacion($gestionData['asesor_id'], $gestionData['cliente_id']);
+                
+                $this->gestionModel->createGestion(
+                    $asignacionId,
+                    $gestionData['tipo_gestion'],
+                    $gestionData['comentarios'],
+                    $gestionData['resultado']
+                );
                 
                 // Respuesta exitosa
                 echo json_encode([
@@ -750,16 +772,41 @@ class AsesorController extends BaseController {
     
     /**
      * Guarda la tipificación de un cliente
+     * IMPORTANTE: Este método debe devolver JSON puro, sin headers ni output adicional
      */
     public function guardarTipificacion() {
+            // Limpiar cualquier output buffer existente
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Iniciar nuevo buffer para capturar cualquier output no deseado
+        ob_start();
+        
         try {
+            // Desactivar display_errors para evitar output no deseado
+            $displayErrors = ini_get('display_errors');
+            ini_set('display_errors', 0);
+            
+            // Establecer headers para JSON
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-cache, must-revalidate');
+            header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+            
+            // Log inicial para debugging
+            error_log("=== INICIO guardarTipificacion ===");
+            error_log("POST data keys: " . implode(', ', array_keys($_POST)));
+            
             // Verificar que sea un asesor
-            if ($_SESSION['user_role'] !== 'asesor') {
-                throw new Exception("Acceso denegado.");
+            if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'asesor') {
+                error_log("Error: Sesión inválida o rol incorrecto");
+                throw new Exception("Acceso denegado. Por favor, inicia sesión nuevamente.");
             }
             
             $asesorId = $_SESSION['user_id'];
             $clienteId = $_POST['cliente_id'] ?? null;
+            
+            error_log("Asesor ID: {$asesorId}, Cliente ID: {$clienteId}");
             
             if (!$clienteId) {
                 throw new Exception("ID de cliente no proporcionado.");
@@ -767,10 +814,41 @@ class AsesorController extends BaseController {
             
             // Obtener datos del formulario
             $formaContacto = $_POST['forma_contacto'] ?? 'llamada';
-            $canalesAutorizados = $_POST['canales_autorizados'] ?? [];
+            
+            // Procesar canales autorizados (pueden venir como array indexado o no indexado)
+            $canalesAutorizados = [];
+            if (isset($_POST['canales_autorizados'])) {
+                if (is_array($_POST['canales_autorizados'])) {
+                    // Array normal (de checkboxes)
+                    $canalesAutorizados = $_POST['canales_autorizados'];
+                } else {
+                    // Single value
+                    $canalesAutorizados = [$_POST['canales_autorizados']];
+                }
+            }
+            
+            // También verificar formato indexado: canales_autorizados[0], canales_autorizados[1], etc.
+            foreach ($_POST as $key => $value) {
+                if (strpos($key, 'canales_autorizados[') === 0) {
+                    $canalesAutorizados[] = $value;
+                }
+            }
+            
+            // Eliminar duplicados
+            $canalesAutorizados = array_unique($canalesAutorizados);
+            
+            // Log de canales autorizados para debugging
+            error_log("Canales autorizados procesados: " . json_encode($canalesAutorizados));
+            
             $tipificacion = $_POST['tipificacion'] ?? '';
             $subTipificacion = $_POST['sub_tipificacion'] ?? '';
             $comentarios = trim($_POST['comentarios'] ?? '');
+            
+            // Validar que los comentarios tengan contenido
+            if (empty($comentarios)) {
+                throw new Exception("Los comentarios son obligatorios.");
+            }
+            
             // Asegurar codificación UTF-8 correcta
             $comentarios = mb_convert_encoding($comentarios, 'UTF-8', 'auto');
             $edadCliente = $_POST['edad'] ?? null;
@@ -793,6 +871,7 @@ class AsesorController extends BaseController {
             $fechaPago = $_POST['fecha_pago'] ?? null;
             $valorCuota = $_POST['valor_cuota'] ?? null;
             $numeroCuota = $_POST['numero_cuota'] ?? null;
+            $valorAcuerdo = $_POST['valor_acuerdo'] ?? null;
             
             // Procesar campos de valor (remover formato de pesos)
             if ($valorCotizacion) {
@@ -804,6 +883,10 @@ class AsesorController extends BaseController {
             if ($valorCuota) {
                 // Remover formato de pesos colombianos (puntos y comas)
                 $valorCuota = (float) str_replace(['.', ','], '', $valorCuota);
+            }
+            if ($valorAcuerdo) {
+                // Remover formato de pesos colombianos (puntos y comas) del valor del acuerdo
+                $valorAcuerdo = (float) str_replace(['.', ','], '', $valorAcuerdo);
             }
             
             // Validar campos obligatorios
@@ -855,14 +938,49 @@ class AsesorController extends BaseController {
                 'fecha_pago' => $fechaPago,
                 'valor_cuota' => $valorCuota,
                 'numero_cuota' => $numeroCuota,
-                'valor_total' => $valorTotal
+                'valor_total' => $valorTotal,
+                'valor_acuerdo' => $valorAcuerdo
             ];
             
+            // Validar datos críticos antes de guardar
+            if (empty($gestionData['asignacion_id'])) {
+                throw new Exception("Error: Asignación ID no válido.");
+            }
+            
+            if (empty($gestionData['tipo_gestion'])) {
+                throw new Exception("Error: Tipo de gestión no válido.");
+            }
+            
+            error_log("Guardando gestión con asignacion_id: {$gestionData['asignacion_id']}, tipo_gestion: {$gestionData['tipo_gestion']}");
+            
             // Guardar en historial_gestion
-            $gestionId = $this->gestionModel->crearGestion($gestionData);
+            $gestionId = $this->gestionModel->createGestion(
+                $gestionData['asignacion_id'],
+                $gestionData['tipo_gestion'],
+                $gestionData['comentarios'],
+                $gestionData['resultado'],
+                $gestionData['monto_venta'],
+                $gestionData['duracion_llamada'],
+                $gestionData['edad'],
+                $gestionData['num_personas'],
+                $gestionData['valor_cotizacion'],
+                $gestionData['whatsapp_enviado'],
+                $gestionData['forma_contacto'],
+                $gestionData['obligacion_id'],
+                $gestionData['producto_gestionado'],
+                $gestionData['monto_obligacion'],
+                $gestionData['numero_obligacion'],
+                $gestionData['no_cuotas'],
+                $gestionData['fecha_pago'],
+                $gestionData['valor_cuota'],
+                $gestionData['numero_cuota'],
+                $gestionData['valor_acuerdo']
+            );
+            
+            error_log("Gestion creada con ID: {$gestionId}");
             
             if (!$gestionId) {
-                throw new Exception("Error al guardar la gestión.");
+                throw new Exception("Error al guardar la gestión en la base de datos.");
             }
             
             // Guardar canales autorizados múltiples
@@ -880,20 +998,45 @@ class AsesorController extends BaseController {
             // Procesar información adicional si existe
             $this->procesarInformacionAdicional($clienteId, $_POST);
             
-            // Respuesta exitosa
-            echo json_encode([
+            // Preparar respuesta exitosa
+            $response = [
                 'success' => true,
                 'message' => 'Tipificación guardada exitosamente',
                 'gestion_id' => $gestionId,
                 'redirect_url' => 'index.php?action=gestionar_cliente&id=' . $clienteId . '&gestion_guardada=1'
-            ]);
+            ];
             
         } catch (Exception $e) {
-            echo json_encode([
+            // Log del error para debugging
+            error_log("Error en guardarTipificacion: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            
+            $response = [
                 'success' => false,
                 'message' => $e->getMessage()
-            ]);
+            ];
         }
+        
+        // Limpiar cualquier output capturado
+        $obContent = ob_get_clean();
+        
+        // Si hay contenido en el buffer que no debería estar ahí, loggearlo
+        if (!empty($obContent) && trim($obContent) !== '') {
+            error_log("Advertencia: Output no esperado antes del JSON: " . substr($obContent, 0, 500));
+        }
+        
+        // Restaurar display_errors
+        if (isset($displayErrors)) {
+            ini_set('display_errors', $displayErrors);
+        }
+        
+        // Log de respuesta para debugging
+        error_log("Respuesta JSON: " . json_encode($response));
+        error_log("=== FIN guardarTipificacion ===");
+        
+        // Enviar respuesta JSON limpia
+        echo json_encode($response, JSON_UNESCAPED_UNICODE);
+        exit; // Asegurar que no se envíe nada más después del JSON
     }
     
     /**
