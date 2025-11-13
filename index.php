@@ -3,55 +3,216 @@
 // Este es el router principal de la aplicación.
 // Incluye los archivos necesarios y maneja las peticiones.
 
-require_once 'config.php';
+// MEJORA: Iniciar output buffer temprano para capturar cualquier output inesperado
+ob_start();
+
+// MEJORA: Configurar manejo de errores desde el inicio
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // No mostrar errores en output
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/logs/error.log');
+
+// MEJORA: Función helper para logging estructurado
+function logError($message, $context = [], $level = 'ERROR') {
+    $timestamp = date('Y-m-d H:i:s');
+    $contextStr = !empty($context) ? ' | Context: ' . json_encode($context) : '';
+    error_log("[{$timestamp}] [{$level}] {$message}{$contextStr}");
+}
+
+// MEJORA: Función helper para enviar respuesta JSON de error
+function sendJsonError($message, $errorCode = 'GENERAL_ERROR', $httpCode = 500) {
+    // Limpiar cualquier output previo
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    // Establecer headers
+    if (!headers_sent()) {
+        http_response_code($httpCode);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+        header('X-Content-Type-Options: nosniff');
+    }
+    
+    // Enviar respuesta JSON
+    echo json_encode([
+        'success' => false,
+        'message' => $message,
+        'error_code' => $errorCode
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+// MEJORA: Lista de acciones que son APIs (deben devolver JSON)
+$apiActions = [
+    'guardar_tipificacion',
+    'get_productos_cliente',
+    'obtener_siguiente_cliente',
+    'obtener_historial_cliente',
+    'obtener_datos_cliente',
+    'buscar_cliente_por_cedula',
+    'get_cliente_para_gestion',
+    'get_tareas_pendientes',
+    'completar_tarea',
+    'obtener_detalles_gestion',
+    'get_telefono_data',
+    'buscar_cliente',
+    'get_clientes_carga',
+    'get_asesores_disponibles_carga',
+    'get_bases_asignadas_asesor',
+    'actualizar_estado_tarea',
+    'get_asesores_base',
+    'get_clientes_no_gestionados',
+    'get_detalles_asesor',
+    'get_asesores_disponibles',
+    'get_asesores_asignados',
+    'buscar_clientes',
+    'buscar_bases_datos',
+    'obtener_actividades_tiempo_real',
+    'obtener_actividades_cliente',
+    'obtener_actividades_producto',
+    'obtener_estadisticas_actividades',
+    'obtener_historial_completo',
+    'crear_producto',
+    'registrar_gestion_producto',
+    'obtener_historial_producto',
+    'obtener_productos_pendientes',
+    'declinar_todos_productos',
+    'obtener_estadisticas_productos'
+];
+
+try {
+    require_once 'config.php';
+} catch (Exception $e) {
+    logError("Error al cargar config.php", ['exception' => $e->getMessage()]);
+    sendJsonError('Error de configuración del sistema', 'CONFIG_ERROR', 500);
+} catch (Throwable $e) {
+    logError("Error fatal al cargar config.php", ['exception' => $e->getMessage()]);
+    sendJsonError('Error crítico de configuración', 'CONFIG_FATAL_ERROR', 500);
+}
 
 // El gestor de sesiones ya está configurado en config.php
 // No necesitamos llamar session_start() manualmente
-require_once 'models/UsuarioModel.php';
-require_once 'models/CargaExcelModel.php';
-require_once 'models/ClienteModel.php';
-require_once 'models/GestionModel.php';
-require_once 'models/TareaModel.php';
-require_once 'controllers/adminController.php';
-require_once 'controllers/CoordinadorController.php';
-require_once 'controllers/AsesorController.php';
-require_once 'controllers/ProductoClienteController.php';
-require_once 'controllers/ActividadController.php';
+try {
+    require_once 'models/UsuarioModel.php';
+    require_once 'models/CargaExcelModel.php';
+    require_once 'models/ClienteModel.php';
+    require_once 'models/GestionModel.php';
+    require_once 'models/TareaModel.php';
+    require_once 'controllers/adminController.php';
+    require_once 'controllers/CoordinadorController.php';
+    require_once 'controllers/AsesorController.php';
+    require_once 'controllers/ProductoClienteController.php';
+    require_once 'controllers/ActividadController.php';
+} catch (Exception $e) {
+    logError("Error al cargar modelos/controladores", ['exception' => $e->getMessage()]);
+    sendJsonError('Error al cargar componentes del sistema', 'LOAD_ERROR', 500);
+} catch (Throwable $e) {
+    logError("Error fatal al cargar modelos/controladores", ['exception' => $e->getMessage()]);
+    sendJsonError('Error crítico al cargar componentes', 'LOAD_FATAL_ERROR', 500);
+}
 
 // Conexión a la base de datos
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    error_log("Conexión a la base de datos exitosa");
+    $pdo->setAttribute(PDO::ATTR_PERSISTENT, false);
+    $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+    logError("Conexión a la base de datos exitosa", [], 'INFO');
 } catch (PDOException $e) {
-    error_log("Error de conexión a la base de datos: " . $e->getMessage());
-    die("Error de conexión: " . $e->getMessage());
+    logError("Error de conexión a la base de datos", ['exception' => $e->getMessage(), 'code' => $e->getCode()]);
+    sendJsonError('Error de conexión a la base de datos', 'DB_CONNECTION_ERROR', 500);
+} catch (Exception $e) {
+    logError("Error inesperado al conectar a la base de datos", ['exception' => $e->getMessage()]);
+    sendJsonError('Error al conectar con la base de datos', 'DB_ERROR', 500);
 }
 
-$action = isset($_GET['action']) ? $_GET['action'] : 'login';
-$session_manager = getSessionManager();
-$user_role = $session_manager->getUserRole();
+// MEJORA: Validar y sanitizar action
+$action = isset($_GET['action']) ? trim($_GET['action']) : 'login';
+if (empty($action)) {
+    $action = 'login';
+}
+
+// MEJORA: Detectar si es una acción API
+$isApiAction = in_array($action, $apiActions);
+
+// MEJORA: Para acciones API, configurar límites y headers temprano
+if ($isApiAction) {
+    set_time_limit(30); // Máximo 30 segundos
+    ini_set('memory_limit', '256M');
+    
+    // Limpiar output buffer y establecer headers JSON
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    ob_start();
+    
+    // Establecer headers JSON ANTES de cualquier operación
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+        header('X-Content-Type-Options: nosniff');
+        // Headers CORS si es necesario
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type');
+    }
+}
+
+try {
+    $session_manager = getSessionManager();
+    $user_role = $session_manager->getUserRole();
+} catch (Exception $e) {
+    logError("Error al obtener sesión", ['exception' => $e->getMessage()]);
+    if ($isApiAction) {
+        sendJsonError('Error de sesión', 'SESSION_ERROR', 401);
+    } else {
+        header('Location: index.php?action=login');
+        exit;
+    }
+}
+
+// MEJORA: Validaciones de entrada básicas
+if ($isApiAction) {
+    // Para APIs, validar método HTTP si es necesario
+    $requiredMethod = in_array($action, ['guardar_tipificacion', 'completar_tarea', 'crear_producto', 'registrar_gestion_producto']) ? 'POST' : 'GET';
+    if ($_SERVER['REQUEST_METHOD'] !== $requiredMethod && $requiredMethod === 'POST') {
+        sendJsonError('Método HTTP no permitido. Se requiere POST.', 'METHOD_NOT_ALLOWED', 405);
+    }
+}
 
 // Lógica de ruteo y control de sesión
 // SOLUCIÓN AL BUCLE: Solo redirigir si no hay sesión Y la acción no es login
 if (!$session_manager->isLoggedIn() && $action !== 'login') {
-    // En lugar de cambiar $action, redirigir directamente
-    header('Location: index.php?action=login');
-    exit;
+    if ($isApiAction) {
+        sendJsonError('Sesión no válida. Por favor, inicia sesión nuevamente.', 'UNAUTHORIZED', 401);
+    } else {
+        // En lugar de cambiar $action, redirigir directamente
+        header('Location: index.php?action=login');
+        exit;
+    }
 }
 
 // Validar que el rol del usuario esté definido
 if ($session_manager->isLoggedIn() && empty($user_role)) {
     // Si hay usuario pero no rol, cerrar sesión y redirigir
     $session_manager->logout();
-    header('Location: index.php?action=login');
-    exit;
+    if ($isApiAction) {
+        sendJsonError('Rol de usuario no válido', 'INVALID_ROLE', 403);
+    } else {
+        header('Location: index.php?action=login');
+        exit;
+    }
 }
 
-// Este switch maneja todas las rutas, llamando a la lógica del controlador apropiado.
-// La instanciación del controlador se mueve dentro de cada case para asegurar que
-// siempre se tenga el controlador correcto.
-switch ($action) {
+// MEJORA: Try-catch global alrededor del switch para capturar errores inesperados
+try {
+    // Este switch maneja todas las rutas, llamando a la lógica del controlador apropiado.
+    // La instanciación del controlador se mueve dentro de cada case para asegurar que
+    // siempre se tenga el controlador correcto.
+    switch ($action) {
     case 'login':
         $controller = new AdminController($pdo);
         $controller->login();
@@ -332,46 +493,35 @@ switch ($action) {
         
     // Acción para obtener datos de teléfono (disponible para todos los roles)
     case 'get_telefono_data':
-        // Limpiar cualquier output previo
-        ob_clean();
-        
         try {
-            $session_manager = getSessionManager();
+            // UsuarioModel ya está cargado
             $usuarioModel = new UsuarioModel($pdo);
             $datosTelefono = $usuarioModel->getDatosTelefono($session_manager->getUserId());
             $tieneTelefono = $usuarioModel->tieneTelefonoConfigurado($session_manager->getUserId());
             
-            header('Content-Type: application/json');
-            header('Cache-Control: no-cache, must-revalidate');
             echo json_encode([
                 'success' => true,
                 'extension' => $datosTelefono['extension_telefono'] ?? '',
                 'clave' => $datosTelefono['clave_webrtc'] ?? '',
                 'tiene_telefono' => $tieneTelefono
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Exception $e) {
-            header('Content-Type: application/json');
+            logError("Error en get_telefono_data", ['exception' => $e->getMessage()]);
             echo json_encode([
                 'success' => false,
                 'error' => 'Error obteniendo datos de teléfono: ' . $e->getMessage()
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
         exit;
         break;
         
     // Acción para buscar clientes (disponible para asesores)
     case 'buscar_cliente':
-        // Limpiar cualquier output previo
-        ob_clean();
-        
         try {
-            // Verificar que el usuario esté logueado y sea asesor
-            $session_manager = getSessionManager();
-            if (!$session_manager->isLoggedIn() || $session_manager->getUserRole() !== 'asesor') {
+            if (!$session_manager->isLoggedIn() || $user_role !== 'asesor') {
                 throw new Exception('Acceso no autorizado');
             }
             
-            // Obtener datos del POST
             $input = json_decode(file_get_contents('php://input'), true);
             
             if (!$input || !isset($input['tipo']) || !isset($input['termino'])) {
@@ -385,11 +535,9 @@ switch ($action) {
                 throw new Exception('El término de búsqueda no puede estar vacío');
             }
             
-            // Incluir el modelo de clientes
-            require_once 'models/ClienteModel.php';
+            // ClienteModel ya está cargado
             $clienteModel = new ClienteModel($pdo);
             
-            // Realizar búsqueda según el tipo
             $clientes = [];
             if ($tipo === 'telefono') {
                 $clientes = $clienteModel->buscarPorTelefono($termino);
@@ -399,18 +547,17 @@ switch ($action) {
                 throw new Exception('Tipo de búsqueda no válido');
             }
             
-            header('Content-Type: application/json');
             echo json_encode([
                 'success' => true,
                 'clientes' => $clientes
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             
         } catch (Exception $e) {
-            header('Content-Type: application/json');
+            logError("Error en buscar_cliente", ['exception' => $e->getMessage()]);
             echo json_encode([
                 'success' => false,
                 'message' => $e->getMessage()
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
         exit;
         break;
@@ -418,12 +565,89 @@ switch ($action) {
         
     default:
         // Si la acción no coincide, redirigir al dashboard (o login si no está logueado)
-        $session_manager = getSessionManager();
-        if ($session_manager->isLoggedIn()) {
-            header('Location: index.php?action=dashboard');
+        if ($isApiAction) {
+            sendJsonError('Acción no válida: ' . htmlspecialchars($action), 'INVALID_ACTION', 404);
         } else {
-            header('Location: index.php?action=login');
+            // $session_manager ya está definido arriba
+            if ($session_manager->isLoggedIn()) {
+                header('Location: index.php?action=dashboard');
+            } else {
+                header('Location: index.php?action=login');
+            }
+            exit;
         }
+        break;
+    }
+    
+} catch (PDOException $e) {
+    // Error de base de datos
+    logError("Error PDO en index.php", [
+        'action' => $action,
+        'exception' => $e->getMessage(),
+        'code' => $e->getCode(),
+        'trace' => $e->getTraceAsString()
+    ]);
+    
+    if ($isApiAction) {
+        sendJsonError('Error de base de datos. Por favor, intenta nuevamente.', 'DB_ERROR', 500);
+    } else {
+        // Para acciones no-API, mostrar error genérico
+        error_log("Error PDO en acción no-API: " . $e->getMessage());
+        header('Location: index.php?action=dashboard&error=db_error');
         exit;
+    }
+    
+} catch (InvalidArgumentException $e) {
+    // Error de validación
+    logError("Error de validación en index.php", [
+        'action' => $action,
+        'exception' => $e->getMessage()
+    ]);
+    
+    if ($isApiAction) {
+        sendJsonError($e->getMessage(), 'VALIDATION_ERROR', 400);
+    } else {
+        header('Location: index.php?action=dashboard&error=validation_error');
+        exit;
+    }
+    
+} catch (Exception $e) {
+    // Error general
+    logError("Error general en index.php", [
+        'action' => $action,
+        'exception' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+    ]);
+    
+    if ($isApiAction) {
+        sendJsonError('Error inesperado. Por favor, contacta al administrador.', 'GENERAL_ERROR', 500);
+    } else {
+        // Para acciones no-API, redirigir con error
+        error_log("Error en acción no-API: " . $e->getMessage());
+        header('Location: index.php?action=dashboard&error=general_error');
+        exit;
+    }
+    
+} catch (Throwable $e) {
+    // Error fatal (incluye errores de PHP 7+)
+    logError("Error fatal en index.php", [
+        'action' => $action,
+        'exception' => $e->getMessage(),
+        'type' => get_class($e),
+        'trace' => $e->getTraceAsString()
+    ]);
+    
+    if ($isApiAction) {
+        sendJsonError('Error crítico del sistema. Por favor, contacta al administrador.', 'FATAL_ERROR', 500);
+    } else {
+        // Para acciones no-API, mostrar error fatal
+        error_log("Error fatal en acción no-API: " . $e->getMessage());
+        die("Error crítico del sistema. Por favor, contacta al administrador.");
+    }
+}
+
+// MEJORA: Limpiar output buffer al final para acciones no-API
+if (!$isApiAction && ob_get_level() > 0) {
+    ob_end_flush();
 }
 ?>
