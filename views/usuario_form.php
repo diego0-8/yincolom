@@ -108,40 +108,31 @@
                         </div>
                     </div>
 
-                    <!-- Campos de Teléfono -->
-                    <div class="form-section">
-                        <h3>📞 Configuración de Teléfono (Opcional)</h3>
-                        <p class="form-help">Configure estos campos para habilitar la funcionalidad Click to Call</p>
+                    <!-- Campos de Teléfono (solo para asesores) -->
+                    <div id="seccion-telefono" style="<?php echo ($usuario['rol'] ?? '') === 'asesor' ? '' : 'display:none;'; ?>">
+                        <div class="form-section">
+                            <h3>📞 Configuración de Teléfono para Asesor (Opcional)</h3>
+                            <p class="form-help">Estos campos solo aplican para usuarios con rol Asesor y habilitan el softphone WebRTC.</p>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="extension_telefono">Extensión Telefónica</label>
+                                <input type="text" id="extension_telefono" name="extension_telefono" 
+                                       value="<?php echo htmlspecialchars($usuario['extension_telefono'] ?? ''); ?>" 
+                                       placeholder="Ej: 1001" class="form-control">
+                                <small class="form-help">Número de extensión del sistema telefónico</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="clave_webrtc">Clave WebRTC</label>
+                                <input type="password" id="clave_webrtc" name="clave_webrtc" 
+                                       value="<?php echo htmlspecialchars($usuario['clave_webrtc'] ?? ''); ?>" 
+                                       placeholder="Contraseña para llamadas" class="form-control">
+                                <small class="form-help">Contraseña para autenticación en el sistema telefónico</small>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="extension_telefono">Extensión Telefónica</label>
-                            <input type="text" id="extension_telefono" name="extension_telefono" 
-                                   value="<?php echo htmlspecialchars($usuario['extension_telefono'] ?? ''); ?>" 
-                                   placeholder="Ej: 1001" class="form-control">
-                            <small class="form-help">Número de extensión del sistema telefónico</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="clave_webrtc">Clave WebRTC</label>
-                            <input type="password" id="clave_webrtc" name="clave_webrtc" 
-                                   value="<?php echo htmlspecialchars($usuario['clave_webrtc'] ?? ''); ?>" 
-                                   placeholder="Contraseña para llamadas" class="form-control">
-                            <small class="form-help">Contraseña para autenticación en el sistema telefónico</small>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="telefono_activo">Activar Teléfono</label>
-                            <select id="telefono_activo" name="telefono_activo" class="form-control">
-                                <option value="No" <?php echo ($usuario['telefono_activo'] ?? 'No') === 'No' ? 'selected' : ''; ?>>No</option>
-                                <option value="Si" <?php echo ($usuario['telefono_activo'] ?? 'No') === 'Si' ? 'selected' : ''; ?>>Sí</option>
-                            </select>
-                            <small class="form-help">Habilita la funcionalidad Click to Call para este usuario</small>
-                        </div>
-                    </div>
-
                     <div class="form-actions">
                         <a href="index.php?action=list_usuarios" class="btn btn-secondary">
                             <i class="fas fa-arrow-left"></i> Volver
@@ -157,6 +148,30 @@
     </div>
 
     <script>
+        // Mostrar/ocultar sección de teléfono según el rol
+        document.addEventListener('DOMContentLoaded', function() {
+            const rolSelect = document.getElementById('rol');
+            const seccionTelefono = document.getElementById('seccion-telefono');
+            const extInput = document.getElementById('extension_telefono');
+            const claveInput = document.getElementById('clave_webrtc');
+
+            function actualizarSeccionTelefono() {
+                if (rolSelect.value === 'asesor') {
+                    seccionTelefono.style.display = '';
+                } else {
+                    // Ocultar y limpiar datos si no es asesor
+                    seccionTelefono.style.display = 'none';
+                    if (extInput) extInput.value = '';
+                    if (claveInput) claveInput.value = '';
+                }
+            }
+
+            if (rolSelect && seccionTelefono) {
+                rolSelect.addEventListener('change', actualizarSeccionTelefono);
+                actualizarSeccionTelefono();
+            }
+        });
+
         // Validación del formulario
         document.querySelector('form').addEventListener('submit', function(e) {
             const nombre = document.getElementById('nombre').value.trim();

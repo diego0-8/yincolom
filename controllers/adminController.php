@@ -34,7 +34,13 @@ class AdminController extends BaseController {
                 if ($user) {
                     // Usuario autenticado correctamente
                     $session_manager->login($user['id'], $user['rol'], $user['nombre_completo']);
-                    
+
+                    // Sincronizar datos de softphone y nombre extendido en la sesión global,
+                    // que es lo que usa la vista gestionar_cliente.php
+                    $_SESSION['usuario_nombre']       = $user['nombre_completo'] ?? $usuario;
+                    $_SESSION['usuario_extension']    = $user['extension_telefono'] ?? '';
+                    $_SESSION['usuario_sip_password'] = $user['clave_webrtc'] ?? '';
+
                     // Log de acceso exitoso
                     error_log("Login exitoso - Usuario: {$usuario}, Rol: {$user['rol']}, ID: {$user['id']}, Sesión: " . $session_manager->getSessionName());
                     

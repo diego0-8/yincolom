@@ -123,15 +123,23 @@ class UsuarioModel {
                 throw new Exception("Datos requeridos faltantes");
             }
             
+            // Solo asesores pueden tener teléfono activo
+            $esAsesor = isset($data['rol']) && $data['rol'] === 'asesor';
+
+            // Si es asesor y se define extensión y clave, asumimos que el teléfono debe estar activo
+            $telefonoActivo = ($esAsesor && !empty($data['extension_telefono']) && !empty($data['clave_webrtc']))
+                ? 'Si'
+                : 'No';
+
             return $stmt->execute([
                 $data['nombre'], 
                 $data['cedula'], 
                 $data['usuario'], 
                 $data['contrasena'], 
                 $data['rol'],
-                $data['extension_telefono'] ?? null,
-                $data['clave_webrtc'] ?? null,
-                $data['telefono_activo'] ?? 'No'
+                $esAsesor ? ($data['extension_telefono'] ?? null) : null,
+                $esAsesor ? ($data['clave_webrtc'] ?? null) : null,
+                $telefonoActivo
             ]);
         } catch (Exception $e) {
             error_log("Error en createUsuario: " . $e->getMessage());
@@ -151,6 +159,14 @@ class UsuarioModel {
             $password = $usePlainPassword 
                 ? $data['contrasena'] 
                 : password_hash($data['contrasena'], PASSWORD_DEFAULT);
+
+            // Solo asesores pueden tener teléfono activo
+            $esAsesor = isset($data['rol']) && $data['rol'] === 'asesor';
+
+            // Recalcular teléfono_activo en base a extensión/clave solo para asesores
+            $telefonoActivo = ($esAsesor && !empty($data['extension_telefono']) && !empty($data['clave_webrtc']))
+                ? 'Si'
+                : 'No';
                 
             return $stmt->execute([
                 $data['nombre'], 
@@ -158,23 +174,32 @@ class UsuarioModel {
                 $data['usuario'], 
                 $data['rol'], 
                 $password, 
-                $data['extension_telefono'] ?? null,
-                $data['clave_webrtc'] ?? null,
-                $data['telefono_activo'] ?? 'No',
+                $esAsesor ? ($data['extension_telefono'] ?? null) : null,
+                $esAsesor ? ($data['clave_webrtc'] ?? null) : null,
+                $telefonoActivo,
                 $id
             ]);
         } else {
             // Si no se proporciona contraseña, no actualizar el campo de contraseña
             $sql = "UPDATE usuarios SET nombre_completo = ?, cedula = ?, usuario = ?, rol = ?, extension_telefono = ?, clave_webrtc = ?, telefono_activo = ? WHERE id = ?";
             $stmt = $this->pdo->prepare($sql);
+
+            // Solo asesores pueden tener teléfono activo
+            $esAsesor = isset($data['rol']) && $data['rol'] === 'asesor';
+
+            // Recalcular teléfono_activo en base a extensión/clave solo para asesores
+            $telefonoActivo = ($esAsesor && !empty($data['extension_telefono']) && !empty($data['clave_webrtc']))
+                ? 'Si'
+                : 'No';
+
             return $stmt->execute([
                 $data['nombre'], 
                 $data['cedula'], 
                 $data['usuario'], 
                 $data['rol'], 
-                $data['extension_telefono'] ?? null,
-                $data['clave_webrtc'] ?? null,
-                $data['telefono_activo'] ?? 'No',
+                $esAsesor ? ($data['extension_telefono'] ?? null) : null,
+                $esAsesor ? ($data['clave_webrtc'] ?? null) : null,
+                $telefonoActivo,
                 $id
             ]);
         }

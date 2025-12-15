@@ -463,8 +463,9 @@ class AsesorController extends BaseController {
                 
                 $_SESSION['success_message'] = "Gestión guardada exitosamente. El cliente ha sido marcado como: " . $nuevoEstado;
                 
-                // Redirigir de vuelta a la gestión del cliente para mostrar el botón de siguiente
-                header('Location: index.php?action=gestionar_cliente&id=' . $asignacionId . '&gestion_guardada=1');
+                // Redirigir de vuelta a la gestión del CLIENTE usando su ID real,
+                // no el ID de la asignación (esto causaba que se buscara un cliente inexistente)
+                header('Location: index.php?action=gestionar_cliente&id=' . $clienteId . '&gestion_guardada=1');
                 exit;
             } else {
                 throw new Exception("Error al guardar la gestión.");
