@@ -1,4 +1,7 @@
 <?php 
+// Incluir ActividadProductoModel al inicio para evitar require_once dentro de métodos
+require_once 'models/ActividadProductoModel.php';
+
 class GestionModel {
     private $pdo;
 
@@ -1516,6 +1519,7 @@ class GestionModel {
                         hg.valor_cuota,
                         hg.numero_cuota,
                         hg.valor_acuerdo,
+                        hg.duracion_llamada,
                         COALESCE(hg.valor_total, o.saldo_k_obligacion) as valor_total,
                         o.obligacion as numero_obligacion_tabla,
                         o.producto as producto_obligacion,
@@ -1884,9 +1888,6 @@ class GestionModel {
             error_log("Asignación encontrada - Cliente: {$asignacion['cliente_id']}, Asesor: {$asignacion['asesor_id']}");
             
             // Crear instancia del modelo de actividades
-            if (!class_exists('ActividadProductoModel')) {
-                require_once 'models/ActividadProductoModel.php';
-            }
             $actividadModel = new ActividadProductoModel($this->pdo);
             
             error_log("Modelo de actividades creado");

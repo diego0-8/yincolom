@@ -40,7 +40,7 @@ class AdminController extends BaseController {
                     $_SESSION['usuario_nombre']       = $user['nombre_completo'] ?? $usuario;
                     $_SESSION['usuario_extension']    = $user['extension_telefono'] ?? '';
                     $_SESSION['usuario_sip_password'] = $user['clave_webrtc'] ?? '';
-
+                    
                     // Log de acceso exitoso
                     error_log("Login exitoso - Usuario: {$usuario}, Rol: {$user['rol']}, ID: {$user['id']}, Sesión: " . $session_manager->getSessionName());
                     

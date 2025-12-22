@@ -734,6 +734,33 @@ class CoordinadorController extends BaseController {
     /**
      * Limpia y convierte un valor a número decimal
      */
+    /**
+     * Convierte minutos (decimal) a formato HH:MM:SS
+     * @param float|null $minutos Duración en minutos
+     * @return string Formato HH:MM:SS o cadena vacía si no hay duración
+     */
+    private function formatearDuracionHHMMSS($minutos) {
+        if (empty($minutos) || $minutos <= 0) {
+            return '00:00:00';
+        }
+        
+        // Convertir minutos a segundos totales (usar round para mantener precisión)
+        $segundosTotales = (int)round($minutos * 60);
+        
+        // Si es menor a 1 segundo, mostrar al menos 1 segundo
+        if ($segundosTotales < 1 && $minutos > 0) {
+            $segundosTotales = 1;
+        }
+        
+        // Calcular horas, minutos y segundos
+        $horas = floor($segundosTotales / 3600);
+        $minutosRestantes = floor(($segundosTotales % 3600) / 60);
+        $segundos = $segundosTotales % 60;
+        
+        // Formatear con ceros a la izquierda
+        return sprintf('%02d:%02d:%02d', $horas, $minutosRestantes, $segundos);
+    }
+
     private function limpiarNumero($valor) {
         if (empty($valor)) return null;
         
@@ -919,36 +946,6 @@ class CoordinadorController extends BaseController {
         require 'views/clientes_list.php';
     }
     
-    public function assignClients($cargaId) {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['clientes']) && isset($_POST['asesor_id'])) {
-            $clienteIds = $_POST['clientes']; // Array de IDs, validar cada uno
-            $asesorId = $this->getPost('asesor_id');
-            $asesorId = $this->validarId($asesorId, 'asesor');
-            $this->clienteModel->assignClientsToAsesor($clienteIds, $asesorId);
-            header('Location: index.php?action=ver_clientes&carga_id=' . $cargaId);
-            exit;
-        }
-    }
-
-    public function viewAsesorProgress($asesorId) {
-        $page_title = "Progreso del Asesor";
-        $asesor = $this->usuarioModel->getUsuarioById($asesorId);
-        $gestiones = $this->gestionModel->getGestionByAsesor($asesorId);
-        $clientes = $this->clienteModel->getAssignedClientsForAsesor($asesorId);
-
-        // Contar el número de gestiones por cliente
-        $gestiones_por_cliente = [];
-        foreach ($gestiones as $gestion) {
-            $clienteId = $gestion['cliente_id'];
-            if (!isset($gestiones_por_cliente[$clienteId])) {
-                $gestiones_por_cliente[$clienteId] = 0;
-            }
-            $gestiones_por_cliente[$clienteId]++;
-        }
-        
-        require 'views/asesor_progreso.php';
-    }
-
     public function tareas() {
         $page_title = "Tareas del Coordinador";
         $coordinador_id = $_SESSION['user_id'];
@@ -1390,6 +1387,7 @@ class CoordinadorController extends BaseController {
             'Obligación/Producto a Gestionar:',
             'Observaciones',
             'Canales Autorizados',
+            'Duración de Gestión',
             'Valor Total (Producto)',
             'Valor del Acuerdo (Acuerdo de Pago)',
             'Total Cuotas (Acuerdo de Pago)',
@@ -1404,6 +1402,12 @@ class CoordinadorController extends BaseController {
             // Verificar si es acuerdo de pago (tipificación 3 nivel = 'ACUERDO DE PAGO')
             $esAcuerdoPago = ($gestion['tipificacion_3_nivel'] ?? '') === 'ACUERDO DE PAGO';
             
+            // Formatear duración de gestión (en minutos)
+            $duracionGestion = '';
+            if (!empty($gestion['duracion_llamada'])) {
+                $duracionGestion = number_format((float)$gestion['duracion_llamada'], 2, '.', '');
+            }
+            
             $row = [
                 $this->limpiarDatoCSV($gestion['fecha_gestion']),
                 $this->limpiarDatoCSV($gestion['asesor_nombre'] ?? 'No asignado'),
@@ -1417,6 +1421,7 @@ class CoordinadorController extends BaseController {
                 $this->limpiarDatoCSV($gestion['obligacion_texto']),
                 $this->limpiarDatoCSV($gestion['comentarios']),
                 $this->limpiarDatoCSV($gestion['canales_autorizados_texto']),
+                $this->limpiarDatoCSV($duracionGestion),
                 // Campos de acuerdo de pago - solo mostrar si es acuerdo de pago
                 $esAcuerdoPago ? $this->formatearValorNumericoCSV($gestion['valor_total'] ?? '') : '',
                 $esAcuerdoPago ? $this->formatearValorNumericoCSV($gestion['valor_acuerdo'] ?? '') : '',
@@ -1581,6 +1586,7 @@ class CoordinadorController extends BaseController {
             'Obligación/Producto a Gestionar:',
             'Observaciones',
             'Canales Autorizados',
+            'Duración de Gestión',
             'Valor Total (Producto)',
             'Valor del Acuerdo (Acuerdo de Pago)',
             'Total Cuotas (Acuerdo de Pago)',
@@ -1607,6 +1613,9 @@ class CoordinadorController extends BaseController {
         
         // Escribir todas las gestiones ordenadas al CSV
         foreach ($todasLasGestiones as $gestion) {
+            // Formatear duración de gestión en formato HH:MM:SS
+            $duracionGestion = $this->formatearDuracionHHMMSS($gestion['duracion_llamada'] ?? null);
+            
             $row = [
                 $this->limpiarDatoCSV($gestion['fecha_gestion']),
                 $this->limpiarDatoCSV($gestion['asesor_nombre'] ?? 'No asignado'),
@@ -1620,6 +1629,7 @@ class CoordinadorController extends BaseController {
                 $this->limpiarDatoCSV($gestion['obligacion_texto']),
                 $this->limpiarDatoCSV($gestion['comentarios']),
                 $this->limpiarDatoCSV($gestion['canales_autorizados_texto']),
+                $this->limpiarDatoCSV($duracionGestion),
                 $this->formatearValorNumericoCSV($gestion['valor_total'] ?? ''),
                 $this->formatearValorNumericoCSV($gestion['valor_acuerdo'] ?? ''),
                 $this->limpiarDatoCSV($gestion['no_cuotas'] ?? ''),
@@ -1727,7 +1737,8 @@ class CoordinadorController extends BaseController {
             'Tipificación 3 Nivel',
             'Obligación/Producto a Gestionar:',
             'Observaciones',
-            'Canales Autorizados'
+            'Canales Autorizados',
+            'Duración de Gestión'
         ];
         fputcsv($output, $headers);
         
@@ -1767,6 +1778,307 @@ class CoordinadorController extends BaseController {
         $asesores = $this->usuarioModel->getAsesoresByCoordinador($coordinador_id);
         
         require 'views/coordinador_reportes_exportacion_simplificado.php';
+    }
+
+    /**
+     * Muestra la vista de reporte TMO (Tiempo Medio de Operación)
+     */
+    public function tmo() {
+        $page_title = "Reporte TMO - Tiempo Medio de Operación";
+        $coordinador_id = $_SESSION['user_id'];
+        
+        // Obtener asesores asignados al coordinador
+        $asesores = $this->usuarioModel->getAsesoresByCoordinador($coordinador_id);
+        
+        require 'views/coordinador_tmo.php';
+    }
+
+    /**
+     * Exporta el reporte TMO (Tiempo Medio de Operación) en formato CSV
+     * Incluye todos los breaks y tiempo de sesión de los asesores
+     */
+    public function exportarTMO($fechaInicio = null, $fechaFin = null) {
+        // Limpiar cualquier output previo
+        ob_clean();
+        
+        try {
+            $coordinador_id = $_SESSION['user_id'];
+            
+            // Obtener fechas del GET si no se proporcionan
+            if (!$fechaInicio) {
+                $fechaInicio = $this->getGet('fecha_inicio', date('Y-m-01'));
+            }
+            if (!$fechaFin) {
+                $fechaFin = $this->getGet('fecha_fin', date('Y-m-t'));
+            }
+            
+            // Validar fechas
+            if (empty($fechaInicio) || empty($fechaFin)) {
+                throw new Exception('Las fechas son obligatorias');
+            }
+            
+            // Obtener asesores asignados al coordinador
+            $asesores = $this->usuarioModel->getAsesoresByCoordinador($coordinador_id);
+            
+            if (empty($asesores)) {
+                throw new Exception('No hay asesores asignados');
+            }
+            
+            // Obtener todos los breaks de los asesores en el rango de fechas
+            $breaks = $this->obtenerBreaksAsesores($asesores, $fechaInicio, $fechaFin);
+            
+            // Generar nombre del archivo
+            $filename = "Reporte_TMO_{$fechaInicio}_a_{$fechaFin}.csv";
+            
+            // Limpiar cualquier salida previa
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
+            // Configurar headers para descarga CSV
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+            
+            // Crear archivo CSV
+            $output = fopen('php://output', 'w');
+            
+            // BOM para UTF-8
+            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+            
+            // Encabezados del CSV
+            $headers = [
+                'Fecha y Hora',
+                'Nombre del Asesor',
+                'Hora Inicio',
+                'Hora Fin',
+                'Tiempo Sesión',
+                'Motivo',
+                'Duración'
+            ];
+            fputcsv($output, $headers);
+            
+            // Escribir todos los breaks ordenados por fecha y hora (mayor a menor)
+            foreach ($breaks as $break) {
+                // Formatear fecha y hora
+                $fechaHora = $this->formatearFechaHora($break['fecha_inicio']);
+                
+                // Formatear hora inicio
+                $horaInicio = $this->formatearHora($break['fecha_inicio']);
+                
+                // Formatear hora fin
+                $horaFin = $break['fecha_fin'] ? $this->formatearHora($break['fecha_fin']) : 'En curso';
+                
+                // Calcular tiempo de sesión (desde inicio del día hasta el break)
+                $tiempoSesion = $this->calcularTiempoSesion($break['fecha_inicio']);
+                
+                // Obtener nombre del motivo
+                $motivo = $this->obtenerNombreMotivo($break['tipo']);
+                
+                // Formatear duración en HH:MM:SS
+                // SIEMPRE calcular desde las fechas para obtener precisión en segundos
+                $duracion = '';
+                if ($break['fecha_fin']) {
+                    // Calcular duración en segundos desde las fechas para mayor precisión
+                    $duracionSegundos = $this->calcularDuracionSegundos($break['fecha_inicio'], $break['fecha_fin']);
+                    $duracion = $this->formatearDuracionHHMMSSDesdeSegundos($duracionSegundos);
+                } elseif ($break['duracion_minutos'] && $break['duracion_minutos'] > 0) {
+                    // Si no hay fecha_fin pero hay duracion_minutos, usar ese valor
+                    $duracion = $this->formatearDuracionHHMMSS($break['duracion_minutos']);
+                } else {
+                    $duracion = 'En curso';
+                }
+                
+                $row = [
+                    $this->limpiarDatoCSV($fechaHora),
+                    $this->limpiarDatoCSV($break['asesor_nombre'] ?? 'No asignado'),
+                    $this->limpiarDatoCSV($horaInicio),
+                    $this->limpiarDatoCSV($horaFin),
+                    $this->limpiarDatoCSV($tiempoSesion),
+                    $this->limpiarDatoCSV($motivo),
+                    $this->limpiarDatoCSV($duracion)
+                ];
+                fputcsv($output, $row);
+            }
+            
+            fclose($output);
+            exit;
+            
+        } catch (Exception $e) {
+            error_log("Error en exportarTMO: " . $e->getMessage());
+            
+            // Limpiar cualquier output previo
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
+            // Mostrar error al usuario
+            header('Content-Type: text/html; charset=utf-8');
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Error</title></head><body>';
+            echo '<h1>Error al exportar reporte TMO</h1>';
+            echo '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
+            echo '<p><a href="index.php?action=tmo">Volver al reporte TMO</a></p>';
+            echo '</body></html>';
+            exit;
+        }
+    }
+
+    /**
+     * Obtiene todos los breaks de los asesores en un rango de fechas
+     */
+    private function obtenerBreaksAsesores($asesores, $fechaInicio, $fechaFin) {
+        try {
+            $asesorIds = array_column($asesores, 'id');
+            if (empty($asesorIds)) {
+                return [];
+            }
+            
+            $placeholders = str_repeat('?,', count($asesorIds) - 1) . '?';
+            
+            $sql = "SELECT 
+                        ba.id,
+                        ba.asesor_id,
+                        ba.tipo,
+                        ba.fecha_inicio,
+                        ba.fecha_fin,
+                        ba.duracion_minutos,
+                        u.nombre_completo as asesor_nombre
+                    FROM breaks_asesor ba
+                    JOIN usuarios u ON ba.asesor_id = u.id
+                    WHERE ba.asesor_id IN ($placeholders)
+                    AND DATE(ba.fecha_inicio) BETWEEN ? AND ?
+                    ORDER BY ba.fecha_inicio DESC";
+            
+            $params = array_merge($asesorIds, [$fechaInicio, $fechaFin]);
+            
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+        } catch (Exception $e) {
+            error_log("Error en obtenerBreaksAsesores: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Formatea fecha y hora para el CSV
+     */
+    private function formatearFechaHora($fechaHora) {
+        if (empty($fechaHora)) {
+            return '';
+        }
+        try {
+            $date = new DateTime($fechaHora);
+            return $date->format('d/m/Y H:i:s');
+        } catch (Exception $e) {
+            return $fechaHora;
+        }
+    }
+
+    /**
+     * Formatea solo la hora
+     */
+    private function formatearHora($fechaHora) {
+        if (empty($fechaHora)) {
+            return '';
+        }
+        try {
+            $date = new DateTime($fechaHora);
+            return $date->format('H:i:s');
+        } catch (Exception $e) {
+            return $fechaHora;
+        }
+    }
+
+    /**
+     * Calcula el tiempo de sesión desde el inicio del día hasta el break
+     */
+    private function calcularTiempoSesion($fechaInicio) {
+        if (empty($fechaInicio)) {
+            return '';
+        }
+        try {
+            $fechaBreak = new DateTime($fechaInicio);
+            $inicioDia = clone $fechaBreak;
+            $inicioDia->setTime(0, 0, 0);
+            
+            // Calcular diferencia en segundos usando timestamps para mayor precisión
+            $timestampBreak = $fechaBreak->getTimestamp();
+            $timestampInicioDia = $inicioDia->getTimestamp();
+            $segundos = abs($timestampBreak - $timestampInicioDia);
+            
+            return $this->formatearDuracionHHMMSSDesdeSegundos($segundos);
+        } catch (Exception $e) {
+            return '';
+        }
+    }
+
+    /**
+     * Obtiene el nombre legible del motivo del break
+     */
+    private function obtenerNombreMotivo($tipo) {
+        $motivos = [
+            'baño' => 'Baño',
+            'almuerzo' => 'Almuerzo',
+            'break' => 'Break',
+            'mantenimiento' => 'Mantenimiento',
+            'actividad_extra' => 'Actividad Extra',
+            'pausa_activa' => 'Pausa Activa'
+        ];
+        
+        return $motivos[$tipo] ?? $tipo;
+    }
+
+    /**
+     * Calcula la duración en minutos entre dos fechas
+     */
+    private function calcularDuracionMinutos($fechaInicio, $fechaFin) {
+        try {
+            $inicio = new DateTime($fechaInicio);
+            $fin = new DateTime($fechaFin);
+            $diferencia = $inicio->diff($fin);
+            
+            return ($diferencia->days * 24 * 60) + ($diferencia->h * 60) + $diferencia->i;
+        } catch (Exception $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Calcula la duración en segundos entre dos fechas (más preciso)
+     */
+    private function calcularDuracionSegundos($fechaInicio, $fechaFin) {
+        try {
+            $inicio = new DateTime($fechaInicio);
+            $fin = new DateTime($fechaFin);
+            
+            // Calcular diferencia en segundos usando timestamps
+            $timestampInicio = $inicio->getTimestamp();
+            $timestampFin = $fin->getTimestamp();
+            
+            return abs($timestampFin - $timestampInicio);
+        } catch (Exception $e) {
+            error_log("Error en calcularDuracionSegundos: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Formatea duración desde segundos a formato HH:MM:SS
+     */
+    private function formatearDuracionHHMMSSDesdeSegundos($segundos) {
+        if (empty($segundos) || $segundos <= 0) {
+            return '00:00:00';
+        }
+        
+        // Calcular horas, minutos y segundos
+        $horas = floor($segundos / 3600);
+        $minutosRestantes = floor(($segundos % 3600) / 60);
+        $segundosRestantes = $segundos % 60;
+        
+        // Formatear con ceros a la izquierda
+        return sprintf('%02d:%02d:%02d', $horas, $minutosRestantes, $segundosRestantes);
     }
     
     /**

@@ -34,7 +34,8 @@ function getNavbar($currentPage = '', $userRole = '') {
                 'Gestión' => 'index.php?action=list_cargas',
                 'Resultados' => 'index.php?action=resultados_equipo',
                 'Tareas' => 'index.php?action=tareas_coordinador',
-                'Reportes CSV' => 'index.php?action=reportes_exportacion'
+                'Reportes CSV' => 'index.php?action=reportes_exportacion',
+                'Reporte TMO' => 'index.php?action=tmo'
             ];
             break;
             

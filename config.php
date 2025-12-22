@@ -8,9 +8,14 @@
 require_once 'includes/session_manager.php';
 
 // Configurar sesión única para este CRM
+// Definir constantes de sesión primero
+define('CRM_NAME', 'INCOMERCIO1');
+define('SESSION_NAME', 'INCOMERCIO1_SID');
+
+// Configurar sesión única para este CRM
 // NOTA: Para el primer proyecto usa: getSessionManager('INCOMERCIO', 'INCOMERCIO_SID')
 // Para el segundo proyecto usa: getSessionManager('INCOMERCIO1', 'INCOMERCIO1_SID')
-$session_manager = getSessionManager('INCOMERCIO1', 'INCOMERCIO1_SID');
+$session_manager = getSessionManager(CRM_NAME, SESSION_NAME);
 
 // Configuración de zona horaria
 date_default_timezone_set('America/Bogota');

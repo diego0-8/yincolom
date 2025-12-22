@@ -312,6 +312,82 @@ class TareaModel {
     }
 
     /**
+     * Buscar clientes en las bases asignadas (acceso completo) por término.
+     * - criterio=auto: intenta detectar si es numérico (cédula/teléfono) o texto (nombre)
+     * - Devuelve máximo $limit resultados
+     *
+     * Importante: limita la búsqueda a las cargas asignadas al asesor.
+     */
+    public function buscarClientesEnBasesAsignadasPorTermino($asesorId, $termino, $criterio = 'auto', $limit = 50) {
+        $termino = trim((string)$termino);
+        if ($termino === '') return [];
+
+        $bases = $this->getBasesAsignadasByAsesor($asesorId);
+        if (empty($bases)) return [];
+
+        $cargaIds = array_values(array_filter(array_map(function($b) {
+            return $b['carga_id'] ?? null;
+        }, $bases)));
+        $cargaIds = array_values(array_unique(array_filter($cargaIds, 'is_numeric')));
+        if (empty($cargaIds)) return [];
+
+        $criterio = strtolower((string)$criterio);
+        if (!in_array($criterio, ['auto','cedula','telefono','nombre'], true)) {
+            $criterio = 'auto';
+        }
+
+        $isNumeric = preg_match('/^\d+$/', $termino) === 1;
+        if ($criterio === 'auto') {
+            $criterio = $isNumeric ? 'cedula' : 'nombre';
+        }
+
+        // Construir SQL seguro con IN dinámico
+        $placeholders = implode(',', array_fill(0, count($cargaIds), '?'));
+
+        // Normalizar limit
+        $limit = (int)$limit;
+        if ($limit <= 0) $limit = 50;
+        if ($limit > 100) $limit = 100;
+
+        // Campos mínimos para el buscador del navbar
+        // Nota: incluimos nombre_cargue para mostrar la base
+        $baseSelect = "SELECT c.id, c.nombre, c.cedula, c.telefono, c.celular2, c.email, c.direccion, ce.nombre_cargue
+                       FROM clientes c
+                       JOIN cargas_excel ce ON c.carga_excel_id = ce.id
+                       WHERE c.carga_excel_id IN ($placeholders)";
+
+        $params = $cargaIds;
+
+        if ($criterio === 'cedula') {
+            // Si viene numérico, permitir también coincidencia por teléfonos/celulares para mejorar experiencia
+            if ($isNumeric) {
+                $baseSelect .= " AND (c.cedula LIKE ? OR c.telefono LIKE ? OR c.celular2 LIKE ?)";
+                $like = '%' . $termino . '%';
+                $params[] = $like;
+                $params[] = $like;
+                $params[] = $like;
+            } else {
+                $baseSelect .= " AND c.cedula LIKE ?";
+                $params[] = '%' . $termino . '%';
+            }
+        } elseif ($criterio === 'telefono') {
+            $like = '%' . $termino . '%';
+            $baseSelect .= " AND (c.telefono LIKE ? OR c.celular2 LIKE ?)";
+            $params[] = $like;
+            $params[] = $like;
+        } else { // nombre
+            $baseSelect .= " AND c.nombre LIKE ?";
+            $params[] = '%' . $termino . '%';
+        }
+
+        $baseSelect .= " ORDER BY c.nombre ASC LIMIT $limit";
+
+        $stmt = $this->pdo->prepare($baseSelect);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
      * Obtener asesores asignados a una base específica
      */
     public function getAsesoresByBase($cargaId) {

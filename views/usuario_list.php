@@ -66,7 +66,7 @@
                                     <th>Usuario</th>
                                     <th>Rol</th>
                                     <th>Estado</th>
-                                    <th>ID</th>
+                                    <th>Extensión</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
@@ -123,9 +123,15 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <small class="text-muted">
-                                                ID: <?php echo htmlspecialchars($usuario['id'] ?? ''); ?>
-                                            </small>
+                                            <?php if (!empty($usuario['extension_telefono'])): ?>
+                                                <span class="badge badge-info" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                                    <i class="fas fa-phone"></i> <?php echo htmlspecialchars($usuario['extension_telefono']); ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="text-muted" style="font-style: italic; font-size: 0.85rem;">
+                                                    Sin extensión
+                                                </span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <div class="action-buttons">

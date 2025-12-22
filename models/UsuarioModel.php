@@ -98,6 +98,33 @@ class UsuarioModel {
             return false;
         }
     }
+    
+    /**
+     * Verifica la contraseña del usuario actual
+     */
+    public function verificarContrasena($userId, $contrasena) {
+        try {
+            $stmt = $this->pdo->prepare("SELECT contrasena FROM usuarios WHERE id = ? AND estado = 'Activo' LIMIT 1");
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($user) {
+                // Verificar si la contraseña está hasheada (empieza con $2y$)
+                if (strpos($user['contrasena'], '$2y$') === 0) {
+                    // Contraseña hasheada, usar password_verify
+                    return password_verify($contrasena, $user['contrasena']);
+                } else {
+                    // Contraseña plana, comparación directa
+                    return $user['contrasena'] === $contrasena;
+                }
+            }
+            
+            return false;
+        } catch (PDOException $e) {
+            error_log("Error en verificarContrasena: " . $e->getMessage());
+            return false;
+        }
+    }
 
     /**
      * Verifica si un usuario existe (sin verificar contraseña)

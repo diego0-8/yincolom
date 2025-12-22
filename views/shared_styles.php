@@ -2,6 +2,7 @@
 // Archivo: views/shared_styles.php
 // Estilos compartidos para todas las vistas del sistema
 ?>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
     /* Reset y configuración base */
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -95,6 +96,31 @@
         background: #b91c1c;
         border-color: #b91c1c;
         transform: translateY(-1px);
+    }
+    
+    /* Botón de Tiempo de Sesión */
+    .session-time-btn {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .session-time-btn:hover {
+        background: #2563eb;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    
+    .session-time-btn i {
+        font-size: 1.1rem;
     }
     
     /* Botón de Teléfono en Navbar */

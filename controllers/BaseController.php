@@ -167,5 +167,67 @@ class BaseController {
         
         return $fecha;
     }
+
+    /**
+     * Limpia todos los output buffers
+     */
+    protected function limpiarOutputBuffers() {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+    }
+
+    /**
+     * Configura headers para respuesta JSON
+     */
+    protected function configurarHeadersJSON() {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-cache, must-revalidate');
+            header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+            header('X-Content-Type-Options: nosniff');
+        }
+    }
+
+    /**
+     * Envía una respuesta JSON de éxito
+     */
+    protected function enviarJSONExito($datos = [], $mensaje = 'Operación exitosa') {
+        $this->limpiarOutputBuffers();
+        $this->configurarHeadersJSON();
+        
+        $respuesta = [
+            'success' => true,
+            'message' => $mensaje
+        ];
+        
+        if (!empty($datos)) {
+            $respuesta = array_merge($respuesta, $datos);
+        }
+        
+        echo json_encode($respuesta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    /**
+     * Envía una respuesta JSON de error
+     */
+    protected function enviarJSONError($mensaje = 'Error en la operación', $codigoError = 'GENERAL_ERROR', $httpCode = 400) {
+        $this->limpiarOutputBuffers();
+        
+        if (!headers_sent()) {
+            http_response_code($httpCode);
+            $this->configurarHeadersJSON();
+        }
+        
+        $respuesta = [
+            'success' => false,
+            'message' => $mensaje,
+            'error_code' => $codigoError
+        ];
+        
+        echo json_encode($respuesta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
 }
 ?>

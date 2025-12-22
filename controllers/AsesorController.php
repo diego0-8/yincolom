@@ -5,44 +5,66 @@
 require_once 'BaseController.php';
 require_once 'models/ProductoClienteModel.php';
 
-class AsesorController extends BaseController {
-    public function __construct($pdo) {
+class AsesorController extends BaseController
+{
+    public function __construct($pdo)
+    {
         parent::__construct($pdo);
     }
-    
-    public function dashboard() {
+
+    public function dashboard()
+    {
         $page_title = "Dashboard Profesional del Asesor";
         $asesor_id = $_SESSION['user_id'];
-        
+
         // Obtener período seleccionado (día, semana, mes)
         $periodo = $_GET['periodo'] ?? 'dia';
-        
+
         // OPTIMIZACIÓN: Obtener todas las métricas en una sola consulta optimizada
         $metricasCompletas = $this->gestionModel->getMetricasDashboardOptimizadas($asesor_id, $periodo);
-        
+
         // Obtener estadísticas de tareas pendientes (optimizado)
         $tareasPendientes = $this->tareaModel->getTareasPendientesByAsesor($asesor_id);
         $totalTareasPendientes = count($tareasPendientes);
-        
+
         // Calcular total de clientes en tareas (optimizado)
         $totalClientesEnTareas = 0;
         if (!empty($tareasPendientes)) {
-            $totalClientesEnTareas = array_sum(array_map(function($tarea) {
+            $totalClientesEnTareas = array_sum(array_map(function ($tarea) {
                 return count($tarea['cliente_ids'] ?? []);
             }, $tareasPendientes));
         }
-        
+
         // Obtener métricas de acuerdos de pago (NUEVA MÉTRICA)
         $acuerdosPago = $this->gestionModel->getTotalAcuerdosPago($asesor_id);
         $totalRecaudadoAcuerdos = $this->gestionModel->getTotalRecaudadoAcuerdos($asesor_id);
-        
+
         // Obtener datos de seguimiento (optimizado - solo los necesarios)
         $llamadasPendientes = $this->gestionModel->getLlamadasPendientesHoy($asesor_id);
         $totalLlamadasPendientesHoy = count($llamadasPendientes);
-        
+
+        // Obtener tipificaciones para los gráficos
+        $tipificaciones = $this->gestionModel->getTipificacionesPorResultado($asesor_id, $periodo);
+        $tipificaciones_totales = $this->gestionModel->getTipificacionesPorResultado($asesor_id, 'mes');
+
         // Determinar el total de clientes real
         $total_clientes = $totalClientesEnTareas > 0 ? $totalClientesEnTareas : $metricasCompletas['total_clientes_gestionados'];
-        
+
+        // Obtener gestiones por día para el gráfico
+        $rawGestionesPorDia = $this->gestionModel->getLlamadasPorDia($asesor_id, $periodo);
+        // Mapear claves para que coincidan con lo que espera la vista
+        $gestionesPorDia = array_map(function ($item) {
+            return [
+                'fecha' => $item['fecha'],
+                'total_gestiones' => $item['total_llamadas'], // La vista espera total_gestiones
+                'contactos_efectivos' => $item['contactos_efectivos'],
+                'ventas' => $item['ventas_exitosas'] // La vista espera ventas
+            ];
+        }, $rawGestionesPorDia);
+
+        // Obtener últimas gestiones
+        $ultimasGestiones = $this->gestionModel->getUltimasGestiones($asesor_id);
+
         // Datos optimizados para el dashboard
         $datos_dashboard = [
             'total_clientes' => $total_clientes,
@@ -55,19 +77,21 @@ class AsesorController extends BaseController {
             'total_llamadas_pendientes_hoy' => $totalLlamadasPendientesHoy,
             'total_tareas_pendientes' => $totalTareasPendientes,
             'clientes_pendientes_tareas' => $totalClientesEnTareas,
-            'metricas_detalladas' => $metricasCompletas
+            'metricas_detalladas' => $metricasCompletas,
+            'tipificaciones_totales' => $tipificaciones_totales
         ];
 
         require 'views/asesor_dashboard.php';
     }
 
-    public function misClientes() {
+    public function misClientes()
+    {
         $page_title = "Mis Clientes";
         $asesorId = $_SESSION['user_id'];
-        
+
         // OPTIMIZACIÓN: Verificar tareas de forma más eficiente
         $tieneTareasPendientes = $this->tareaModel->tieneTareasPendientes($asesorId);
-        
+
         if ($tieneTareasPendientes) {
             // OPTIMIZACIÓN: Obtener todos los datos en una sola consulta
             $todosClientes = $this->tareaModel->getClientesTareasConMetricas($asesorId);
@@ -75,59 +99,59 @@ class AsesorController extends BaseController {
             // Si no tiene tareas pendientes, mostrar mensaje de "No tienes tareas pendientes"
             $todosClientes = [];
         }
-        
+
         // Parámetros de paginación
         $por_pagina = 10; // 10 clientes por página
         $pagina_actual = isset($_GET['pagina']) ? max(1, intval($_GET['pagina'])) : 1;
         $offset = ($pagina_actual - 1) * $por_pagina;
-        
+
         // Filtrar por cédula si se proporciona un término de búsqueda
         $terminoBusqueda = $_GET['buscar'] ?? '';
         if (!empty($terminoBusqueda)) {
-            $todosClientes = array_filter($todosClientes, function($cliente) use ($terminoBusqueda) {
+            $todosClientes = array_filter($todosClientes, function ($cliente) use ($terminoBusqueda) {
                 return stripos($cliente['cedula'], $terminoBusqueda) !== false;
             });
         }
-        
+
         // Separar clientes por estado para las pestañas
-        $clientes_pendientes = array_filter($todosClientes, function($cliente) {
+        $clientes_pendientes = array_filter($todosClientes, function ($cliente) {
             return $cliente['total_gestiones'] == 0;
         });
-        
-        $clientes_gestionados = array_filter($todosClientes, function($cliente) {
+
+        $clientes_gestionados = array_filter($todosClientes, function ($cliente) {
             return $cliente['total_gestiones'] > 0;
         });
-        
-        $clientes_con_ventas = array_filter($todosClientes, function($cliente) {
-            return !empty($cliente['ultimo_resultado']) && 
-                   in_array($cliente['ultimo_resultado'], ['Venta Exitosa', 'Venta en Frío', 'Venta con Seguimiento', 'Venta Cruzada']);
+
+        $clientes_con_ventas = array_filter($todosClientes, function ($cliente) {
+            return !empty($cliente['ultimo_resultado']) &&
+                in_array($cliente['ultimo_resultado'], ['Venta Exitosa', 'Venta en Frío', 'Venta con Seguimiento', 'Venta Cruzada']);
         });
-        
+
         // Calcular estadísticas
         $clientesGestionados = count($clientes_con_ventas);
         $clientesPendientes = count($clientes_pendientes);
         $clientesConGestiones = count($clientes_gestionados);
         $totalVentas = 0;
-        
+
         foreach ($todosClientes as $cliente) {
             if (!empty($cliente['monto_venta'])) {
                 $totalVentas += $cliente['monto_venta'];
             }
         }
-        
+
         // Obtener datos de llamadas pendientes para las notificaciones
         $llamadasPendientes = $this->gestionModel->getLlamadasPendientesHoy($asesorId);
         $totalLlamadasPendientesHoy = $this->gestionModel->getTotalLlamadasPendientesHoy($asesorId);
-        
+
         // Crear array de datos del dashboard para las notificaciones
         $datos_dashboard = [
             'llamadas_pendientes' => $llamadasPendientes,
             'total_llamadas_pendientes_hoy' => $totalLlamadasPendientesHoy
         ];
-        
+
         // Determinar qué pestaña está activa
         $pestaña_activa = isset($_GET['filter']) ? $_GET['filter'] : 'todos';
-        
+
         // Calcular paginación para la pestaña activa
         switch ($pestaña_activa) {
             case 'pendientes':
@@ -139,7 +163,7 @@ class AsesorController extends BaseController {
                 // Aplicar filtros adicionales para clientes gestionados
                 $filtro_resultado = $_GET['filtro_resultado'] ?? 'todos';
                 $clientes_gestionados_filtrados = $this->filtrarClientesGestionados($clientes_gestionados, $filtro_resultado);
-                
+
                 $total_clientes = count($clientes_gestionados_filtrados);
                 $clientesAsignados = array_slice($clientes_gestionados_filtrados, $offset, $por_pagina);
                 $total_paginas = ceil($total_clientes / $por_pagina);
@@ -173,77 +197,96 @@ class AsesorController extends BaseController {
                 $total_paginas = ceil($total_clientes / $por_pagina);
                 break;
         }
-        
+
         require 'views/asesor_clientes_list.php';
     }
-    
+
     /**
      * Filtra los clientes gestionados según el resultado de la gestión
      */
-    private function filtrarClientesGestionados($clientesGestionados, $filtroResultado) {
+    private function filtrarClientesGestionados($clientesGestionados, $filtroResultado)
+    {
         if ($filtroResultado === 'todos') {
             return $clientesGestionados;
         }
-        
+
         $clientesFiltrados = [];
-        
+
         foreach ($clientesGestionados as $cliente) {
             $ultimoResultado = $cliente['ultimo_resultado'] ?? '';
-            
+
             switch ($filtroResultado) {
                 case 'volver_llamar':
                     if (in_array($ultimoResultado, ['VOLVER A LLAMAR', 'Agenda Llamada de Seguimiento'])) {
                         $clientesFiltrados[] = $cliente;
                     }
                     break;
-                    
+
                 case 'interesados':
                     if (in_array($ultimoResultado, ['INTERESADO', 'Cliente Interesado', 'Necesita Pensarlo'])) {
                         $clientesFiltrados[] = $cliente;
                     }
                     break;
-                    
+
                 case 'ventas_positivas':
                     if (in_array($ultimoResultado, ['VENTA INGRESADA', 'Venta Exitosa', 'Venta en Frío', 'Venta con Seguimiento', 'Venta Cruzada'])) {
                         $clientesFiltrados[] = $cliente;
                     }
                     break;
-                    
+
                 case 'rechazos':
                     if (in_array($ultimoResultado, ['Rechazo por Precio', 'Rechazo por Competencia', 'No Interesado', 'No Califica'])) {
                         $clientesFiltrados[] = $cliente;
                     }
                     break;
-                    
+
                 case 'contactos_no_efectivos':
                     if (in_array($ultimoResultado, ['No Contesta', 'Número Equivocado', 'Buzón de Voz', 'Número Fuera de Servicio', 'Cliente Ocupado'])) {
                         $clientesFiltrados[] = $cliente;
                     }
                     break;
-                    
+
                 case 'otros':
-                    if (!in_array($ultimoResultado, [
-                        'VOLVER A LLAMAR', 'Agenda Llamada de Seguimiento',
-                        'INTERESADO', 'Cliente Interesado', 'Necesita Pensarlo',
-                        'VENTA INGRESADA', 'Venta Exitosa', 'Venta en Frío', 'Venta con Seguimiento', 'Venta Cruzada',
-                        'Rechazo por Precio', 'Rechazo por Competencia', 'No Interesado', 'No Califica',
-                        'No Contesta', 'Número Equivocado', 'Buzón de Voz', 'Número Fuera de Servicio', 'Cliente Ocupado'
-                    ]) && !empty($ultimoResultado)) {
+                    if (
+                        !in_array($ultimoResultado, [
+                            'VOLVER A LLAMAR',
+                            'Agenda Llamada de Seguimiento',
+                            'INTERESADO',
+                            'Cliente Interesado',
+                            'Necesita Pensarlo',
+                            'VENTA INGRESADA',
+                            'Venta Exitosa',
+                            'Venta en Frío',
+                            'Venta con Seguimiento',
+                            'Venta Cruzada',
+                            'Rechazo por Precio',
+                            'Rechazo por Competencia',
+                            'No Interesado',
+                            'No Califica',
+                            'No Contesta',
+                            'Número Equivocado',
+                            'Buzón de Voz',
+                            'Número Fuera de Servicio',
+                            'Cliente Ocupado'
+                        ]) && !empty($ultimoResultado)
+                    ) {
                         $clientesFiltrados[] = $cliente;
                     }
                     break;
             }
         }
-        
+
         return $clientesFiltrados;
     }
-    
+
     /**
      * Determina la clase CSS para el resultado de la gestión
      */
-    private function getClaseResultado($resultado) {
-        if (empty($resultado)) return '';
-        
+    private function getClaseResultado($resultado)
+    {
+        if (empty($resultado))
+            return '';
+
         if (in_array($resultado, ['VOLVER A LLAMAR', 'Agenda Llamada de Seguimiento'])) {
             return 'volver-llamar';
         } elseif (in_array($resultado, ['INTERESADO', 'Cliente Interesado', 'Necesita Pensarlo'])) {
@@ -260,93 +303,109 @@ class AsesorController extends BaseController {
     }
 
 
-    public function gestionarCliente($clienteId) {
+    public function gestionarCliente($clienteId)
+    {
         $page_title = "Gestionar Cliente";
         $asesorId = $_SESSION['user_id'];
-        
+
         // Verificar que el cliente pertenece a una base asignada al asesor
         $basesAsignadas = $this->tareaModel->getBasesAsignadasByAsesor($asesorId);
         $cargaIds = array_column($basesAsignadas, 'carga_id');
-        
+
         if (empty($cargaIds)) {
             $_SESSION['error_message'] = "No tienes bases asignadas para gestionar clientes.";
             header('Location: index.php?action=gestionar_clientes');
             exit;
         }
-        
+
         // Verificar que el cliente pertenece a una de las bases asignadas
         $sql = "SELECT c.*, ce.nombre_cargue 
                 FROM clientes c 
                 JOIN cargas_excel ce ON c.carga_excel_id = ce.id 
                 WHERE c.id = ? AND c.carga_excel_id IN (" . implode(',', array_fill(0, count($cargaIds), '?')) . ")";
-        
+
         $params = array_merge([$clienteId], $cargaIds);
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$cliente) {
             $_SESSION['error_message'] = "No tienes permisos para gestionar este cliente o el cliente no existe.";
             header('Location: index.php?action=gestionar_clientes');
             exit;
         }
-        
+
         // Obtener el ID de la asignación (si existe) o crear uno temporal
         $asignacionId = $this->clienteModel->getAsignacionId($asesorId, $clienteId);
         if (!$asignacionId) {
             // Crear una asignación temporal para el cliente
             $asignacionId = $this->clienteModel->createTemporaryAsignacion($asesorId, $clienteId);
         }
-        
+
         // Verificar si el asesor tiene tareas pendientes
         $tieneTareasPendientes = $this->tareaModel->tieneTareasPendientes($asesorId);
-        
+
         // Obtener estadísticas básicas del cliente
         $total_gestiones = 0; // Se puede implementar después
         $ultima_gestion = 'N/A'; // Se puede implementar después
         $estado_actual = 'Nuevo'; // Se puede implementar después
-        
+
         // Procesar formulario si se envía
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->procesarGestionCliente($asesorId, $clienteId, $asignacionId);
         }
-        
+
         // Obtener todas las obligaciones del cliente
         $obligaciones = $this->obligacionModel->getObligacionesByClienteId($clienteId);
-        
+
         // Obtener estadísticas de obligaciones
         $estadisticasObligaciones = $this->obligacionModel->getEstadisticasObligaciones($cliente['cedula']);
-        
+
         // Obtener historial de gestiones (usar método existente)
         $historial = $this->gestionModel->getGestionByAsesorAndCliente($asesorId, $clienteId);
-        
+
         // Obtener productos del cliente
         $productoModel = new ProductoClienteModel($this->pdo);
         $productos = $productoModel->getProductosByCliente($clienteId);
-        
-        require 'views/gestionar_cliente.php';
+
+        // Obtener datos del teléfono del usuario para el softphone
+        $datosTelefono = $this->usuarioModel->getDatosTelefono($asesorId);
+        $tieneTelefono = $this->usuarioModel->tieneTelefonoConfigurado($asesorId);
+
+        // Obtener configuración WebRTC
+        require_once 'config/asterisk.php';
+        $webrtcConfig = getWebRTCConfig();
+
+        // Calcular base path
+        $basePath = dirname($_SERVER['PHP_SELF']);
+        if ($basePath === '/' || $basePath === '\\') {
+            $basePath = '';
+        }
+
+        require 'views/asesor_gestionar_cliente.php';
     }
-    
-    private function procesarGestionCliente($asesorId, $clienteId, $asignacionId) {
+
+    private function procesarGestionCliente($asesorId, $clienteId, $asignacionId)
+    {
         try {
             // Validar datos requeridos
             if (empty($_POST['sub_tipificacion']) || empty($_POST['comentarios'])) {
                 throw new Exception("Todos los campos obligatorios deben ser completados.");
             }
-            
+
             $sub_tipificacion = $_POST['sub_tipificacion'];
             $comentarios = $_POST['comentarios'];
-            
+
             // Determinar el tipo de gestión basado en la tipificación
             $tipo_gestion = 'Llamada de Venta'; // Por defecto
-            
+
             // Campos específicos según la tipificación
             $monto_venta = null;
             $producto_vendido = null;
             $fecha_agendamiento = null;
             $fecha_nueva_llamada = null;
             $motivo_nueva_llamada = null;
-            
+
             // Procesar según la tipificación seleccionada
             if ($sub_tipificacion === 'INTERESADO') {
                 // Cliente interesado - información completa
@@ -355,18 +414,18 @@ class AsesorController extends BaseController {
                 $num_personas = $_POST['num_personas'] ?? null;
                 $valor_cotizacion = $_POST['valor_cotizacion'] ?? null;
                 $whatsapp_enviado = $_POST['whatsapp_enviado'] ?? null;
-                
+
                 if (empty($edad) || empty($num_personas) || empty($valor_cotizacion) || empty($whatsapp_enviado)) {
                     throw new Exception("Para clientes interesados, todos los campos son obligatorios.");
                 }
-                
+
                 // Agregar información adicional a los comentarios
                 $comentarios .= "\n\n📊 INFORMACIÓN DEL CLIENTE INTERESADO:\n";
                 $comentarios .= "Edad: " . $edad . " años\n";
                 $comentarios .= "Personas a cubrir: " . $num_personas . "\n";
                 $comentarios .= "Valor cotización: $" . number_format($valor_cotizacion, 0, ',', '.') . "\n";
                 $comentarios .= "WhatsApp: " . $whatsapp_enviado;
-                
+
             } elseif ($sub_tipificacion === 'VENTA INGRESADA') {
                 // Venta ingresada - información completa
                 $tipo_gestion = 'Venta Ingresada';
@@ -374,38 +433,38 @@ class AsesorController extends BaseController {
                 $num_personas = $_POST['num_personas'] ?? null;
                 $monto_venta = $_POST['monto_venta'] ?? null;
                 $whatsapp_enviado = $_POST['whatsapp_enviado'] ?? null;
-                
+
                 if (empty($edad) || empty($num_personas) || empty($monto_venta) || empty($whatsapp_enviado)) {
                     throw new Exception("Para ventas ingresadas, todos los campos son obligatorios.");
                 }
-                
+
                 // Agregar información adicional a los comentarios
                 $comentarios .= "\n\n💰 INFORMACIÓN DE LA VENTA INGRESADA:\n";
                 $comentarios .= "Edad: " . $edad . " años\n";
                 $comentarios .= "Personas a cubrir: " . $num_personas . "\n";
                 $comentarios .= "Valor venta: $" . number_format($monto_venta, 0, ',', '.') . "\n";
                 $comentarios .= "WhatsApp: " . $whatsapp_enviado;
-                
+
             } elseif ($sub_tipificacion === 'VOLVER A LLAMAR') {
                 // Agendar nueva llamada
                 $fecha_nueva_llamada = $_POST['fecha_nueva_llamada'] ?? null;
                 $motivo_nueva_llamada = $_POST['motivo_nueva_llamada'] ?? null;
-                
+
                 if (empty($fecha_nueva_llamada) || empty($motivo_nueva_llamada)) {
                     throw new Exception("Para agendar nueva llamada, fecha y motivo son obligatorios.");
                 }
-                
+
                 $tipo_gestion = 'Llamada de Seguimiento';
                 $comentarios .= "\n\n📅 NUEVA LLAMADA AGENDADA:\nFecha: " . date('d/m/Y H:i', strtotime($fecha_nueva_llamada)) . "\nMotivo: " . $motivo_nueva_llamada;
-                
+
             } else {
                 // Otras tipificaciones - solo observaciones
                 $tipo_gestion = 'Llamada de Gestión';
             }
-            
+
             // Procesar información adicional del cliente si se proporciona
             $this->procesarInformacionAdicional($clienteId, $_POST);
-            
+
             // Crear la gestión
             $gestionData = [
                 'asignacion_id' => $asignacionId,
@@ -422,18 +481,18 @@ class AsesorController extends BaseController {
                 'duracion_llamada' => $_POST['duracion_llamada'] ?? null,
                 'forma_contacto' => $_POST['forma_contacto'] ?? 'llamada'
             ];
-            
+
             // Obtener campos de cuotas si están disponibles
             $noCuotas = $_POST['no_cuotas'] ?? null;
             $fechaPago = $_POST['fecha_pago'] ?? null;
             $valorCuota = $_POST['valor_cuota'] ?? null;
             $numeroCuota = $_POST['numero_cuota'] ?? null;
-            
+
             // Procesar valor de cuota si está presente
             if ($valorCuota) {
                 $valorCuota = (float) str_replace(['.', ','], '', $valorCuota);
             }
-            
+
             $gestionId = $this->gestionModel->createGestion(
                 $gestionData['asignacion_id'],
                 $gestionData['tipo_gestion'],
@@ -455,14 +514,14 @@ class AsesorController extends BaseController {
                 $valorCuota,
                 $numeroCuota
             );
-            
+
             if ($gestionId) {
                 // Actualizar estado del cliente según la tipificación
                 $nuevoEstado = $this->determinarNuevoEstadoCliente($sub_tipificacion);
                 $this->clienteModel->actualizarCliente($clienteId, ['estado_cliente' => $nuevoEstado]);
-                
+
                 $_SESSION['success_message'] = "Gestión guardada exitosamente. El cliente ha sido marcado como: " . $nuevoEstado;
-                
+
                 // Redirigir de vuelta a la gestión del CLIENTE usando su ID real,
                 // no el ID de la asignación (esto causaba que se buscara un cliente inexistente)
                 header('Location: index.php?action=gestionar_cliente&id=' . $clienteId . '&gestion_guardada=1');
@@ -470,31 +529,32 @@ class AsesorController extends BaseController {
             } else {
                 throw new Exception("Error al guardar la gestión.");
             }
-            
+
         } catch (Exception $e) {
             $_SESSION['error_message'] = $e->getMessage();
             header('Location: index.php?action=gestionar_cliente&id=' . $asignacionId);
             exit;
         }
     }
-    
+
     /**
      * Guarda un cliente nuevo durante la llamada
      */
-    public function guardarClienteNuevo() {
+    public function guardarClienteNuevo()
+    {
         try {
             // Verificar que sea un asesor
             if ($_SESSION['user_role'] !== 'asesor') {
                 throw new Exception("Acceso denegado.");
             }
-            
+
             $asesorId = $_SESSION['user_id'];
-            
+
             // Validar campos obligatorios
             if (empty($_POST['nuevo_cedula']) || empty($_POST['nuevo_telefono'])) {
                 throw new Exception("Los campos Cédula y Teléfono son obligatorios.");
             }
-            
+
             // Preparar datos del cliente
             $clienteData = [
                 'nombre' => trim($_POST['nuevo_nombre']),
@@ -508,10 +568,10 @@ class AsesorController extends BaseController {
                 'coordinador_id' => $_SESSION['user_coordinador_id'] ?? null,
                 'carga_excel_id' => null // Cliente nuevo no viene de carga
             ];
-            
+
             // Crear el cliente
             $clienteId = $this->clienteModel->crearCliente($clienteData);
-            
+
             if ($clienteId) {
                 // Crear gestión inicial para el cliente nuevo
                 $gestionData = [
@@ -523,17 +583,17 @@ class AsesorController extends BaseController {
                     'comentarios' => "Cliente nuevo captado durante llamada. " . ($_POST['nuevo_observaciones'] ?? ''),
                     'estado' => 'Completada'
                 ];
-                
+
                 // Crear asignación temporal para el cliente nuevo
                 $asignacionId = $this->clienteModel->createTemporaryAsignacion($gestionData['asesor_id'], $gestionData['cliente_id']);
-                
+
                 $this->gestionModel->createGestion(
                     $asignacionId,
                     $gestionData['tipo_gestion'],
                     $gestionData['comentarios'],
                     $gestionData['resultado']
                 );
-                
+
                 // Respuesta exitosa
                 echo json_encode([
                     'success' => true,
@@ -543,7 +603,7 @@ class AsesorController extends BaseController {
             } else {
                 throw new Exception("Error al crear el cliente.");
             }
-            
+
         } catch (Exception $e) {
             echo json_encode([
                 'success' => false,
@@ -551,11 +611,12 @@ class AsesorController extends BaseController {
             ]);
         }
     }
-    
+
     /**
      * Obtiene los datos de un cliente específico para carga AJAX
      */
-    public function obtenerDatosCliente() {
+    public function obtenerDatosCliente()
+    {
         try {
             // Verificar que sea un asesor
             if ($_SESSION['user_role'] !== 'asesor') {
@@ -569,17 +630,34 @@ class AsesorController extends BaseController {
                 throw new Exception("ID de cliente no proporcionado.");
             }
 
-            // Verificar que el cliente esté asignado al asesor
-            $asignacionId = $this->clienteModel->getAsignacionId($asesorId, $clienteId);
-            if (!$asignacionId) {
-                throw new Exception("No tienes permisos para acceder a este cliente.");
+            // Verificar que el cliente pertenece a una base asignada al asesor
+            $basesAsignadas = $this->tareaModel->getBasesAsignadasByAsesor($asesorId);
+            $cargaIds = array_column($basesAsignadas, 'carga_id');
+
+            if (empty($cargaIds)) {
+                throw new Exception("No tienes bases asignadas para gestionar clientes.");
             }
 
-            // Obtener información del cliente
-            $cliente = $this->clienteModel->getClienteById($clienteId);
+            // Verificar que el cliente pertenece a una de las bases asignadas
+            $sql = "SELECT c.*, ce.nombre_cargue 
+                    FROM clientes c 
+                    JOIN cargas_excel ce ON c.carga_excel_id = ce.id 
+                    WHERE c.id = ? AND c.carga_excel_id IN (" . implode(',', array_fill(0, count($cargaIds), '?')) . ")";
+
+            $params = array_merge([$clienteId], $cargaIds);
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
+            $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$cliente) {
-                throw new Exception("Cliente no encontrado.");
+                throw new Exception("No tienes permisos para acceder a este cliente o el cliente no existe.");
+            }
+
+            // Obtener o crear asignación (igual que en gestionarCliente)
+            $asignacionId = $this->clienteModel->getAsignacionId($asesorId, $clienteId);
+            if (!$asignacionId) {
+                // Crear una asignación temporal para el cliente
+                $asignacionId = $this->clienteModel->createTemporaryAsignacion($asesorId, $clienteId);
             }
 
             // Obtener historial de gestiones
@@ -598,24 +676,74 @@ class AsesorController extends BaseController {
                 'estado_cliente' => $cliente['estado_cliente']
             ];
 
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'success' => true,
                 'cliente' => $clienteData,
                 'historial' => $historial ?: []
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
 
         } catch (Exception $e) {
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'success' => false,
                 'message' => $e->getMessage()
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+    }
+
+    /**
+     * Obtiene obligaciones/contratos de un cliente específico para carga AJAX
+     * (usado por cambiarClienteSinRecargar para evitar recargas y mantener el softphone activo)
+     */
+    public function obtenerContratosCliente()
+    {
+        try {
+            // Verificar que sea un asesor
+            if (($_SESSION['user_role'] ?? '') !== 'asesor') {
+                throw new Exception("Acceso denegado.");
+            }
+
+            $asesorId = $_SESSION['user_id'] ?? null;
+            $clienteId = $_GET['id'] ?? null;
+
+            if (!$asesorId || !$clienteId) {
+                throw new Exception("ID de cliente no proporcionado.");
+            }
+
+            // Verificar que el cliente esté asignado al asesor
+            $asignacionId = $this->clienteModel->getAsignacionId($asesorId, $clienteId);
+            if (!$asignacionId) {
+                throw new Exception("No tienes permisos para acceder a este cliente.");
+            }
+
+            $obligaciones = $this->obligacionModel->getObligacionesByClienteId($clienteId);
+
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => true,
+                'obligaciones' => $obligaciones ?: []
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+
+        } catch (Exception $e) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'obligaciones' => []
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
         }
     }
 
     /**
      * Obtiene el siguiente cliente en la lista del asesor
      */
-    public function obtenerSiguienteCliente() {
+    public function obtenerSiguienteCliente()
+    {
         try {
             // Verificar que sea un asesor
             if ($_SESSION['user_role'] !== 'asesor') {
@@ -646,36 +774,37 @@ class AsesorController extends BaseController {
             ]);
         }
     }
-    
+
     /**
      * Determina el nuevo estado del cliente según la tipificación
      */
-    private function determinarNuevoEstadoCliente($tipificacion) {
+    private function determinarNuevoEstadoCliente($tipificacion)
+    {
         // Tipificaciones de CON INTENCION DE PAGO
         if (strpos($tipificacion, '1.1.') === 0) {
             return 'En Proceso';
         }
-        
+
         // Tipificaciones de SIN INTENCION DE PAGO
         if (strpos($tipificacion, '1.2.') === 0) {
             return 'No Interesado';
         }
-        
+
         // Tipificaciones de NO COLABORA
         if (strpos($tipificacion, '1.3.') === 0) {
             return 'No Colabora';
         }
-        
+
         // Tipificaciones de YA PAGO
         if (strpos($tipificacion, '1.4.') === 0) {
             return 'Pagado';
         }
-        
+
         // Tipificaciones de NO CONTACTADO
         if (strpos($tipificacion, '2.') === 0) {
             return 'No Contactado';
         }
-        
+
         // Fallback para tipificaciones antiguas
         switch ($tipificacion) {
             case 'VENDIDO':
@@ -690,75 +819,78 @@ class AsesorController extends BaseController {
                 return 'Contactado';
         }
     }
-    
-    private function procesarInformacionAdicional($clienteId, $postData) {
+
+    private function procesarInformacionAdicional($clienteId, $postData)
+    {
         try {
             $nuevo_telefono = $postData['nuevo_telefono'] ?? null;
             $nuevo_celular = $postData['nuevo_celular'] ?? null;
             $nuevo_email = $postData['nuevo_email'] ?? null;
             $nueva_direccion = $postData['nueva_direccion'] ?? null;
             $nueva_ciudad = $postData['nueva_ciudad'] ?? null;
-            
+
             // Campos opcionales de información de pago
             $fechaPagoEsperada = $postData['fecha_pago_esperada'] ?? null;
             $montoPendiente = $postData['monto_pendiente'] ?? null;
             $detallesPago = $postData['detalles_pago'] ?? null;
             $motivoNuevaLlamada = $postData['motivo_nueva_llamada'] ?? null;
-            
+
             // Solo procesar si hay información nueva
-            if ($nuevo_telefono || $nuevo_celular || $nuevo_email || $nueva_direccion || $nueva_ciudad || 
-                $fechaPagoEsperada || $montoPendiente || $detallesPago || $motivoNuevaLlamada) {
+            if (
+                $nuevo_telefono || $nuevo_celular || $nuevo_email || $nueva_direccion || $nueva_ciudad ||
+                $fechaPagoEsperada || $montoPendiente || $detallesPago || $motivoNuevaLlamada
+            ) {
                 // Preparar datos para actualizar
                 $datosActualizar = [];
-                
+
                 if ($nuevo_telefono) {
                     $datosActualizar['telefono'] = $nuevo_telefono;
                 }
-                
+
                 if ($nuevo_celular) {
                     $datosActualizar['celular2'] = $nuevo_celular;
                 }
-                
+
                 if ($nuevo_email) {
                     $datosActualizar['email'] = $nuevo_email;
                 }
-                
+
                 if ($nueva_direccion) {
                     $datosActualizar['direccion'] = $nueva_direccion;
                 }
-                
+
                 if ($nueva_ciudad) {
                     $datosActualizar['ciudad'] = $nueva_ciudad;
                 }
-                
+
                 // Actualizar cliente si hay datos nuevos
                 if (!empty($datosActualizar)) {
                     $this->clienteModel->actualizarCliente($clienteId, $datosActualizar);
-                    
+
                     error_log("Información adicional actualizada para cliente $clienteId: " . json_encode($datosActualizar));
                 }
-                
+
                 // Procesar campos opcionales de información de pago
                 $camposOpcionales = [];
-                
+
                 if ($fechaPagoEsperada) {
                     $camposOpcionales['fecha_pago_esperada'] = $fechaPagoEsperada;
                 }
-                
+
                 if ($montoPendiente) {
                     // Procesar monto pendiente (remover formato de pesos)
                     $montoPendiente = (int) str_replace(['.', ','], '', $montoPendiente);
                     $camposOpcionales['monto_pendiente'] = $montoPendiente;
                 }
-                
+
                 if ($detallesPago) {
                     $camposOpcionales['detalles_pago'] = $detallesPago;
                 }
-                
+
                 if ($motivoNuevaLlamada) {
                     $camposOpcionales['motivo_nueva_llamada'] = $motivoNuevaLlamada;
                 }
-                
+
                 // Guardar campos opcionales en la base de datos si existen
                 if (!empty($camposOpcionales)) {
                     // Aquí podrías guardar en una tabla específica para información adicional
@@ -770,12 +902,13 @@ class AsesorController extends BaseController {
             error_log("Error procesando información adicional: " . $e->getMessage());
         }
     }
-    
+
     /**
      * Guarda la tipificación de un cliente
      * IMPORTANTE: Este método debe devolver JSON puro, sin headers ni output adicional
      */
-    public function guardarTipificacion() {
+    public function guardarTipificacion()
+    {
         // MEJORADO: Manejo robusto para evitar error 520
         // NUEVO: Configurar límites de tiempo y memoria
         set_time_limit(30); // Máximo 30 segundos por operación
@@ -783,23 +916,23 @@ class AsesorController extends BaseController {
         if ($memoryLimit < 256) {
             ini_set('memory_limit', '256M');
         }
-        
+
         // Limpiar TODOS los buffers existentes
         while (ob_get_level() > 0) {
             ob_end_clean();
         }
-        
+
         // Asegurar que no haya output previo
         if (ob_get_level() == 0) {
             ob_start();
         }
-        
+
         // Desactivar display_errors y warnings ANTES de cualquier operación
         $displayErrors = ini_get('display_errors');
         $errorReporting = error_reporting();
         ini_set('display_errors', 0);
         error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED);
-        
+
         // Establecer headers para JSON ANTES de cualquier output
         if (!headers_sent()) {
             header('Content-Type: application/json; charset=utf-8');
@@ -807,7 +940,7 @@ class AsesorController extends BaseController {
             header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
             header('X-Content-Type-Options: nosniff');
         }
-        
+
         // NUEVO: Verificar conexión a la base de datos antes de continuar
         try {
             $this->pdo->query("SELECT 1");
@@ -840,30 +973,30 @@ class AsesorController extends BaseController {
                 exit;
             }
         }
-        
+
         try {
             // Log inicial para debugging
             error_log("=== INICIO guardarTipificacion ===");
             error_log("POST data keys: " . implode(', ', array_keys($_POST)));
-            
+
             // Verificar que sea un asesor
             if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'asesor') {
                 error_log("Error: Sesión inválida o rol incorrecto");
                 throw new Exception("Acceso denegado. Por favor, inicia sesión nuevamente.");
             }
-            
+
             $asesorId = $_SESSION['user_id'];
             $clienteId = $_POST['cliente_id'] ?? null;
-            
+
             error_log("Asesor ID: {$asesorId}, Cliente ID: {$clienteId}");
-            
+
             if (!$clienteId) {
                 throw new Exception("ID de cliente no proporcionado.");
             }
-            
+
             // Obtener datos del formulario
             $formaContacto = $_POST['forma_contacto'] ?? 'llamada';
-            
+
             // Procesar canales autorizados (pueden venir como array indexado o no indexado)
             $canalesAutorizados = [];
             if (isset($_POST['canales_autorizados'])) {
@@ -875,29 +1008,29 @@ class AsesorController extends BaseController {
                     $canalesAutorizados = [$_POST['canales_autorizados']];
                 }
             }
-            
+
             // También verificar formato indexado: canales_autorizados[0], canales_autorizados[1], etc.
             foreach ($_POST as $key => $value) {
                 if (strpos($key, 'canales_autorizados[') === 0) {
                     $canalesAutorizados[] = $value;
                 }
             }
-            
+
             // Eliminar duplicados
             $canalesAutorizados = array_unique($canalesAutorizados);
-            
+
             // Log de canales autorizados para debugging
             error_log("Canales autorizados procesados: " . json_encode($canalesAutorizados));
-            
+
             $tipificacion = $_POST['tipificacion'] ?? '';
             $subTipificacion = $_POST['sub_tipificacion'] ?? '';
             $comentarios = trim($_POST['comentarios'] ?? '');
-            
+
             // Validar que los comentarios tengan contenido
             if (empty($comentarios)) {
                 throw new Exception("Los comentarios son obligatorios.");
             }
-            
+
             // Asegurar codificación UTF-8 correcta
             $comentarios = mb_convert_encoding($comentarios, 'UTF-8', 'auto');
             $edadCliente = $_POST['edad'] ?? null;
@@ -908,20 +1041,20 @@ class AsesorController extends BaseController {
             $duracionLlamada = $_POST['duracion_llamada'] ?? null;
             $fechaProximaLlamada = $_POST['fecha_nueva_llamada'] ?? null;
             $horaProximaLlamada = null;
-            
+
             // Campos opcionales de información de pago
             $fechaPagoEsperada = $_POST['fecha_pago_esperada'] ?? null;
             $montoPendiente = $_POST['monto_pendiente'] ?? null;
             $detallesPago = $_POST['detalles_pago'] ?? null;
             $motivoNuevaLlamada = $_POST['motivo_nueva_llamada'] ?? null;
-            
+
             // Campos específicos de acuerdo de pago
             $noCuotas = $_POST['no_cuotas'] ?? null;
             $fechaPago = $_POST['fecha_pago'] ?? null;
             $valorCuota = $_POST['valor_cuota'] ?? null;
             $numeroCuota = $_POST['numero_cuota'] ?? null;
             $valorAcuerdo = $_POST['valor_acuerdo'] ?? null;
-            
+
             // Procesar campos de valor (remover formato de pesos)
             if ($valorCotizacion) {
                 $valorCotizacion = (int) str_replace(['.', ','], '', $valorCotizacion);
@@ -937,25 +1070,33 @@ class AsesorController extends BaseController {
                 // Remover formato de pesos colombianos (puntos y comas) del valor del acuerdo
                 $valorAcuerdo = (float) str_replace(['.', ','], '', $valorAcuerdo);
             }
-            
+
             // Validar campos obligatorios
             if (empty($tipificacion) || empty($comentarios)) {
                 throw new Exception("La tipificación y los comentarios son obligatorios.");
             }
-            
+
+            // Validar que si es acuerdo de pago (resultado '03'), se debe seleccionar una obligación
+            if ($subTipificacion === '03') {
+                $obligacionId = $_POST['obligacion_id'] ?? null;
+                if (empty($obligacionId) || $obligacionId === 'ninguna') {
+                    throw new Exception("Para registrar un acuerdo de pago, debe seleccionar una obligación.");
+                }
+            }
+
             // Obtener el ID de asignación
             $asignacionId = $this->clienteModel->getAsignacionId($asesorId, $clienteId);
-            
+
             if (!$asignacionId) {
                 throw new Exception("No se encontró la asignación del cliente para este asesor.");
             }
-            
+
             // Obtener información de la obligación si está seleccionada
             $obligacionId = $_POST['obligacion_id'] ?? null;
             $productoGestionado = $_POST['producto_gestionado'] ?? null;
             $montoObligacion = $_POST['monto_obligacion'] ?? null;
             $numeroObligacion = $_POST['numero_obligacion'] ?? null;
-            
+
             // Obtener valor_total del producto desde la base de datos
             $valorTotal = null;
             if ($obligacionId) {
@@ -964,7 +1105,7 @@ class AsesorController extends BaseController {
                     $valorTotal = $obligacion['saldo_k_obligacion'];
                 }
             }
-            
+
             // Crear registro en historial_gestion
             $gestionData = [
                 'asignacion_id' => $asignacionId,
@@ -990,18 +1131,18 @@ class AsesorController extends BaseController {
                 'valor_total' => $valorTotal,
                 'valor_acuerdo' => $valorAcuerdo
             ];
-            
+
             // Validar datos críticos antes de guardar
             if (empty($gestionData['asignacion_id'])) {
                 throw new Exception("Error: Asignación ID no válido.");
             }
-            
+
             if (empty($gestionData['tipo_gestion'])) {
                 throw new Exception("Error: Tipo de gestión no válido.");
             }
-            
+
             error_log("Guardando gestión con asignacion_id: {$gestionData['asignacion_id']}, tipo_gestion: {$gestionData['tipo_gestion']}");
-            
+
             // Guardar en historial_gestion
             $gestionId = $this->gestionModel->createGestion(
                 $gestionData['asignacion_id'],
@@ -1025,28 +1166,28 @@ class AsesorController extends BaseController {
                 $gestionData['numero_cuota'],
                 $gestionData['valor_acuerdo']
             );
-            
+
             error_log("Gestion creada con ID: {$gestionId}");
-            
+
             if (!$gestionId) {
                 throw new Exception("Error al guardar la gestión en la base de datos.");
             }
-            
+
             // Guardar canales autorizados múltiples
             if (!empty($canalesAutorizados)) {
                 $this->gestionModel->guardarCanalesAutorizados($gestionId, $canalesAutorizados);
-                
+
                 // Registrar actividad de canales autorizados
                 $this->registrarActividadCanales($gestionId, $clienteId, $asesorId, $canalesAutorizados);
             }
-            
+
             // Actualizar estado del cliente
             $nuevoEstado = $this->determinarNuevoEstadoCliente($subTipificacion ?: $tipificacion);
             $this->clienteModel->actualizarCliente($clienteId, ['estado_cliente' => $nuevoEstado]);
-            
+
             // Procesar información adicional si existe
             $this->procesarInformacionAdicional($clienteId, $_POST);
-            
+
             // Preparar respuesta exitosa
             $response = [
                 'success' => true,
@@ -1054,13 +1195,13 @@ class AsesorController extends BaseController {
                 'gestion_id' => $gestionId,
                 'redirect_url' => 'index.php?action=gestionar_cliente&id=' . $clienteId . '&gestion_guardada=1'
             ];
-            
+
         } catch (PDOException $e) {
             // Log del error PDO para debugging
             error_log("Error PDO en guardarTipificacion: " . $e->getMessage());
             error_log("SQL State: " . $e->getCode());
             error_log("Stack trace: " . $e->getTraceAsString());
-            
+
             $response = [
                 'success' => false,
                 'message' => 'Error de base de datos. Por favor, intenta nuevamente.',
@@ -1070,7 +1211,7 @@ class AsesorController extends BaseController {
             // Log del error para debugging
             error_log("Error en guardarTipificacion: " . $e->getMessage());
             error_log("Stack trace: " . $e->getTraceAsString());
-            
+
             $response = [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -1080,24 +1221,24 @@ class AsesorController extends BaseController {
             // Capturar cualquier error fatal o throwable
             error_log("Error fatal en guardarTipificacion: " . $e->getMessage());
             error_log("Stack trace: " . $e->getTraceAsString());
-            
+
             $response = [
                 'success' => false,
                 'message' => 'Error inesperado. Por favor, contacta al administrador.',
                 'error_code' => 'FATAL_ERROR'
             ];
         }
-        
+
         // Limpiar cualquier output capturado
         $obContent = ob_get_clean();
-        
+
         // Si hay contenido en el buffer que no debería estar ahí, loggearlo
         if (!empty($obContent) && trim($obContent) !== '') {
             error_log("Advertencia: Output no esperado antes del JSON: " . substr($obContent, 0, 500));
             // Limpiar el contenido para asegurar JSON limpio
             $obContent = '';
         }
-        
+
         // Restaurar configuración de errores
         if (isset($displayErrors)) {
             ini_set('display_errors', $displayErrors);
@@ -1105,13 +1246,13 @@ class AsesorController extends BaseController {
         if (isset($errorReporting)) {
             error_reporting($errorReporting);
         }
-        
+
         // NUEVO: Limpiar recursos antes de enviar respuesta
         // Cerrar statements abiertos
         if (isset($stmt) && $stmt instanceof PDOStatement) {
             $stmt->closeCursor();
         }
-        
+
         // Asegurar que no haya output previo
         while (ob_get_level() > 0) {
             $obContent = ob_get_clean();
@@ -1119,14 +1260,14 @@ class AsesorController extends BaseController {
                 error_log("Output no esperado detectado y limpiado: " . substr($obContent, 0, 200));
             }
         }
-        
+
         // Verificar que los headers no se hayan enviado ya
         if (!headers_sent()) {
             header('Content-Type: application/json; charset=utf-8');
             header('Cache-Control: no-cache, must-revalidate');
             header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
         }
-        
+
         // Log de respuesta para debugging (solo si no es muy grande)
         $responseJson = json_encode($response);
         if (strlen($responseJson) < 1000) {
@@ -1135,16 +1276,16 @@ class AsesorController extends BaseController {
             error_log("Respuesta JSON generada (tamaño: " . strlen($responseJson) . " bytes)");
         }
         error_log("=== FIN guardarTipificacion ===");
-        
+
         // Enviar respuesta JSON limpia con manejo de errores
         try {
             $jsonResponse = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            
+
             if ($jsonResponse === false) {
                 // Si json_encode falla, verificar el error
                 $jsonError = json_last_error_msg();
                 error_log("Error en json_encode: " . $jsonError);
-                
+
                 // Intentar con datos simplificados
                 $responseSimplificada = [
                     'success' => $response['success'] ?? false,
@@ -1152,16 +1293,16 @@ class AsesorController extends BaseController {
                     'error_code' => $response['error_code'] ?? 'JSON_ENCODE_ERROR'
                 ];
                 $jsonResponse = json_encode($responseSimplificada);
-                
+
                 if ($jsonResponse === false) {
                     // Último recurso: respuesta mínima
                     $jsonResponse = '{"success":false,"message":"Error al procesar la respuesta","error_code":"JSON_ENCODE_ERROR"}';
                 }
             }
-            
+
             // Asegurar que no haya espacios antes del JSON
             echo trim($jsonResponse);
-            
+
         } catch (Exception $e) {
             error_log("Excepción al enviar JSON: " . $e->getMessage());
             // Último recurso: respuesta de error simple
@@ -1170,53 +1311,84 @@ class AsesorController extends BaseController {
             error_log("Error fatal al enviar JSON: " . $e->getMessage());
             echo '{"success":false,"message":"Error fatal","error_code":"FATAL_ERROR"}';
         }
-        
+
         // Asegurar que no se envíe nada más
         if (function_exists('fastcgi_finish_request')) {
             @fastcgi_finish_request();
         }
-        
+
         // Cerrar conexión PDO si es necesario (pero no siempre, puede estar en uso)
         // $this->pdo = null; // Comentado para no romper otras operaciones
-        
+
         exit;
     }
-    
+
     /**
      * Obtiene el historial de gestiones de un cliente específico
      */
-    public function obtenerHistorialCliente() {
+    /**
+     * Obtiene el historial de gestiones de un cliente específico
+     * Endpoint: index.php?action=obtener_historial_cliente&id={clienteId}
+     */
+    public function obtenerHistorialCliente()
+    {
+        // Limpiar cualquier output previo
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
         try {
             // Verificar que sea un asesor
-            if ($_SESSION['user_role'] !== 'asesor') {
+            if (($_SESSION['user_role'] ?? '') !== 'asesor') {
                 throw new Exception("Acceso denegado.");
             }
-            
-            $asesorId = $_SESSION['user_id'];
+
+            $asesorId = $_SESSION['user_id'] ?? null;
+            if (!$asesorId) {
+                throw new Exception("Sesión inválida.");
+            }
+
             $clienteId = $_GET['id'] ?? null;
-            
+
             if (!$clienteId) {
                 throw new Exception("ID de cliente no proporcionado.");
             }
-            
-            // Obtener el historial del cliente
+
+            // Obtener el historial del cliente usando el mismo método que en gestionarCliente
             $historial = $this->gestionModel->getGestionByAsesorAndCliente($asesorId, $clienteId);
-            
-            if ($historial === false) {
+
+            // El método devuelve un array vacío si no hay historial, no false
+            if (!is_array($historial)) {
                 throw new Exception("Error al obtener el historial del cliente.");
             }
-            
+
+            // Establecer headers JSON
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-cache, must-revalidate');
+            header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+
             // Respuesta exitosa
             echo json_encode([
                 'success' => true,
-                'historial' => $historial
-            ]);
-            
+                'historial' => $historial ?: []
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            exit;
+
         } catch (Exception $e) {
+            // Limpiar buffer y enviar error JSON
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
+
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'success' => false,
-                'message' => $e->getMessage()
-            ]);
+                'message' => $e->getMessage(),
+                'historial' => []
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            exit;
         }
     }
 
@@ -1225,26 +1397,28 @@ class AsesorController extends BaseController {
     /**
      * Vista de gestión de clientes (búsqueda por cédula)
      */
-    public function gestionarClientes() {
+    public function gestionarClientes()
+    {
         $page_title = "Gestión de Clientes";
         $asesorId = $_SESSION['user_id'];
-        
+
         // Obtener bases asignadas al asesor
         $basesAsignadas = $this->tareaModel->getBasesAsignadasByAsesor($asesorId);
-        
+
         // Verificar si tiene tareas pendientes
         $tieneTareasPendientes = $this->tareaModel->tieneTareasPendientes($asesorId);
-        
+
         require 'views/asesor_gestionar_clientes.php';
     }
 
     /**
      * Buscar cliente por cédula en las bases asignadas
      */
-    public function buscarClientePorCedula() {
+    public function buscarClientePorCedula()
+    {
         $asesorId = $_SESSION['user_id'];
         $cedula = $_GET['cedula'] ?? '';
-        
+
         if (empty($cedula)) {
             echo json_encode([
                 'success' => false,
@@ -1252,9 +1426,9 @@ class AsesorController extends BaseController {
             ]);
             exit;
         }
-        
+
         $clientes = $this->tareaModel->buscarClienteEnBasesAsignadas($asesorId, $cedula);
-        
+
         echo json_encode([
             'success' => true,
             'clientes' => $clientes,
@@ -1264,12 +1438,70 @@ class AsesorController extends BaseController {
     }
 
     /**
+     * Buscar clientes del asesor por término (auto: cédula/teléfono/nombre)
+     * Endpoint estilo APEX7: index.php?action=buscar_cliente_asesor (POST JSON)
+     *
+     * Body:
+     *  - termino: string
+     *  - criterio: 'auto'|'cedula'|'telefono'|'nombre'
+     */
+    public function buscarClienteAsesor()
+    {
+        try {
+            if (($_SESSION['user_role'] ?? '') !== 'asesor') {
+                throw new Exception("Acceso denegado.");
+            }
+
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+                throw new Exception("Método no permitido.");
+            }
+
+            $asesorId = $_SESSION['user_id'] ?? null;
+            if (!$asesorId) {
+                throw new Exception("Sesión inválida.");
+            }
+
+            $input = json_decode(file_get_contents('php://input'), true);
+            $termino = trim((string) ($input['termino'] ?? ''));
+            $criterio = (string) ($input['criterio'] ?? 'auto');
+
+            if ($termino === '' || strlen($termino) < 2) {
+                echo json_encode([
+                    'success' => true,
+                    'clientes' => [],
+                    'total' => 0
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+
+            $clientes = $this->tareaModel->buscarClientesEnBasesAsignadasPorTermino($asesorId, $termino, $criterio, 50);
+
+            echo json_encode([
+                'success' => true,
+                'clientes' => $clientes,
+                'total' => count($clientes)
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'clientes' => [],
+                'total' => 0
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+    }
+
+    /**
      * Obtener información de un cliente específico para gestión
      */
-    public function getClienteParaGestion() {
+    public function getClienteParaGestion()
+    {
         $asesorId = $_SESSION['user_id'];
         $clienteId = $_GET['cliente_id'] ?? null;
-        
+
         if (!$clienteId) {
             echo json_encode([
                 'success' => false,
@@ -1277,21 +1509,21 @@ class AsesorController extends BaseController {
             ]);
             exit;
         }
-        
+
         // Verificar que el cliente pertenece a una base asignada al asesor
         $basesAsignadas = $this->tareaModel->getBasesAsignadasByAsesor($asesorId);
         $cargaIds = array_column($basesAsignadas, 'carga_id');
-        
+
         $sql = "SELECT c.*, ce.nombre_cargue 
                 FROM clientes c 
                 JOIN cargas_excel ce ON c.carga_excel_id = ce.id 
                 WHERE c.id = ? AND c.carga_excel_id IN (" . implode(',', array_fill(0, count($cargaIds), '?')) . ")";
-        
+
         $params = array_merge([$clienteId], $cargaIds);
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$cliente) {
             echo json_encode([
                 'success' => false,
@@ -1299,16 +1531,16 @@ class AsesorController extends BaseController {
             ]);
             exit;
         }
-        
+
         // Obtener historial de gestiones del cliente
         $historial = $this->gestionModel->getGestionByAsesorAndCliente($asesorId, $clienteId);
-        
+
         // Obtener obligaciones del cliente
         $obligaciones = $this->obligacionModel->getObligacionesByClienteId($clienteId);
-        
+
         // Obtener estadísticas de obligaciones
         $estadisticasObligaciones = $this->obligacionModel->getEstadisticasObligaciones($cliente['cedula']);
-        
+
         echo json_encode([
             'success' => true,
             'cliente' => $cliente,
@@ -1322,10 +1554,11 @@ class AsesorController extends BaseController {
     /**
      * Obtener tareas pendientes del asesor
      */
-    public function getTareasPendientes() {
+    public function getTareasPendientes()
+    {
         $asesorId = $_SESSION['user_id'];
         $tareas = $this->tareaModel->getTareasPendientesByAsesor($asesorId);
-        
+
         echo json_encode([
             'success' => true,
             'tareas' => $tareas
@@ -1336,20 +1569,21 @@ class AsesorController extends BaseController {
     /**
      * Marcar tarea como completada
      */
-    public function completarTarea() {
+    public function completarTarea()
+    {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             echo json_encode(['error' => 'Método no permitido']);
             exit;
         }
-        
+
         $asesorId = $_SESSION['user_id'];
         $tareaId = $_POST['tarea_id'] ?? null;
-        
+
         if (!$tareaId) {
             echo json_encode(['error' => 'ID de tarea requerido']);
             exit;
         }
-        
+
         // Verificar que la tarea pertenece al asesor
         $tareas = $this->tareaModel->getTareasByAsesor($asesorId);
         $tareaExiste = false;
@@ -1359,14 +1593,14 @@ class AsesorController extends BaseController {
                 break;
             }
         }
-        
+
         if (!$tareaExiste) {
             echo json_encode(['error' => 'No tienes permisos para modificar esta tarea']);
             exit;
         }
-        
+
         $resultado = $this->tareaModel->actualizarEstadoTarea($tareaId, 'completada', $asesorId);
-        
+
         if ($resultado) {
             echo json_encode(['success' => true, 'message' => 'Tarea completada correctamente']);
         } else {
@@ -1374,137 +1608,209 @@ class AsesorController extends BaseController {
         }
         exit;
     }
-    
+
     /**
      * Muestra la interfaz de gestión de productos para un cliente específico
      */
-    public function gestionarProductosCliente() {
+    public function gestionarProductosCliente()
+    {
         $this->verificarRol('asesor');
-        
+
         $clienteId = $this->getGet('cliente_id');
         $clienteId = $this->validarId($clienteId, 'cliente');
-        
+
         // Verificar que el cliente esté asignado al asesor
         $cliente = $this->clienteModel->getClienteById($clienteId);
         if (!$cliente || $cliente['asesor_id'] != $_SESSION['user_id']) {
             $this->redirigirConError('index.php?action=mis_clientes', 'Cliente no encontrado o no asignado');
             return;
         }
-        
+
         // Redirigir a la interfaz de gestión de productos
         header('Location: index.php?action=gestionar_productos&cliente_id=' . $clienteId);
         exit;
     }
-    
+
     /**
      * Obtiene los detalles completos de una gestión específica
      */
-    public function obtenerDetallesGestion() {
+    public function obtenerDetallesGestion()
+    {
         // Limpiar cualquier output previo
         while (ob_get_level()) {
             ob_end_clean();
         }
-        
+
         // Iniciar buffer de salida
         ob_start();
-        
+
         try {
             // Verificar que sea un asesor
             if ($_SESSION['user_role'] !== 'asesor') {
                 throw new Exception("Acceso denegado.");
             }
-            
+
             $gestionId = $_GET['id'] ?? null;
-            
+
             if (!$gestionId) {
                 throw new Exception("ID de gestión no proporcionado.");
             }
-            
+
             $asesorId = $_SESSION['user_id'];
-            
+
             // Obtener la gestión con todos sus detalles
             $gestion = $this->gestionModel->getGestionById($gestionId);
-            
-            if (!$gestion) {
+
+            if (!$gestion || empty($gestion)) {
                 throw new Exception("Gestión no encontrada.");
             }
-            
+
             // Verificar que la gestión pertenece al asesor
+            // Usar la misma lógica que getGestionByAsesorAndCliente: verificar acceso a través de bases asignadas
             $asignacion = $this->clienteModel->getAsignacionById($gestion['asignacion_id']);
-            if (!$asignacion || $asignacion['asesor_id'] != $asesorId) {
+
+            if (!$asignacion) {
+                throw new Exception("No tienes acceso a esta gestión (asignación no encontrada).");
+            }
+
+            // Obtener el cliente de la asignación
+            $cliente = $this->clienteModel->getClienteById($asignacion['cliente_id']);
+            if (!$cliente) {
+                throw new Exception("No tienes acceso a esta gestión (cliente no encontrado).");
+            }
+
+            // Verificar acceso usando la misma lógica que getGestionByAsesorAndCliente:
+            // El asesor debe tener acceso a la base de datos del cliente
+            $tieneAcceso = false;
+
+            // Opción 1: La asignación pertenece directamente al asesor
+            if ($asignacion['asesor_id'] == $asesorId) {
+                $tieneAcceso = true;
+            }
+
+            // Opción 2: El asesor tiene acceso a la base de datos del cliente (misma lógica que el historial)
+            if (!$tieneAcceso && isset($cliente['carga_excel_id'])) {
+                $sql = "SELECT 1 FROM asignaciones_base_asesor 
+                        WHERE asesor_id = ? AND carga_id = ? AND estado = 'activa' 
+                        LIMIT 1";
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute([$asesorId, $cliente['carga_excel_id']]);
+                $baseAsignada = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($baseAsignada) {
+                    $tieneAcceso = true;
+                }
+            }
+
+            if (!$tieneAcceso) {
                 throw new Exception("No tienes acceso a esta gestión.");
             }
-            
+
             // Obtener canales autorizados para esta gestión
             $canalesAutorizados = $this->gestionModel->getCanalesAutorizados($gestionId);
-            
-            // Obtener información del asesor
-            $asesor = $this->usuarioModel->getUsuarioById($asignacion['asesor_id']);
-            
+
+            // Obtener información del asesor que creó la gestión (puede ser diferente al asesor actual)
+            $asesorGestion = $this->usuarioModel->getUsuarioById($asignacion['asesor_id']);
+
+            // Si no se encuentra el asesor de la asignación, intentar obtenerlo del historial
+            if (!$asesorGestion) {
+                // Buscar el asesor en el historial usando el mismo método que getGestionByAsesorAndCliente
+                $sql = "SELECT u.id, u.nombre_completo 
+                        FROM historial_gestion hg 
+                        JOIN asignaciones_clientes ac ON hg.asignacion_id = ac.id 
+                        JOIN usuarios u ON ac.asesor_id = u.id
+                        WHERE hg.id = ? 
+                        LIMIT 1";
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute([$gestionId]);
+                $asesorGestion = $stmt->fetch(PDO::FETCH_ASSOC);
+            }
+
+            $asesor = $asesorGestion;
+
             // Agregar canales autorizados y asesor a la gestión
             $gestion['canales_autorizados'] = $canalesAutorizados;
             $gestion['asesor_nombre'] = $asesor ? $asesor['nombre_completo'] : 'No especificado';
-            
+
+            // Asegurar que comentarios esté presente (puede ser NULL o vacío)
+            // El campo comentarios debe existir en la tabla historial_gestion
+            if (!isset($gestion['comentarios'])) {
+                $gestion['comentarios'] = '';
+            } elseif ($gestion['comentarios'] === null) {
+                $gestion['comentarios'] = '';
+            }
+
+            // Convertir comentarios a string si es necesario
+            $gestion['comentarios'] = (string) $gestion['comentarios'];
+
+            // Obtener tipificación completa
+            $gestion['tipificacion_completa'] = $this->gestionModel->getTipificacionCompleta(
+                $gestion['tipo_gestion'] ?? '',
+                $gestion['resultado'] ?? ''
+            );
+
             // Formatear fecha
-            $gestion['fecha_gestion'] = date('d/m/Y H:i', strtotime($gestion['fecha_gestion']));
-            
+            $fechaOriginal = $gestion['fecha_gestion'];
+            $gestion['fecha_gestion'] = date('d/m/Y H:i', strtotime($fechaOriginal));
+
             // Formatear próxima fecha si existe
-            if ($gestion['proxima_fecha']) {
+            if (!empty($gestion['proxima_fecha'])) {
                 $gestion['proxima_fecha'] = date('d/m/Y H:i', strtotime($gestion['proxima_fecha']));
             }
-            
+
             // Limpiar el buffer y enviar solo JSON
             ob_clean();
-            
-            header('Content-Type: application/json');
+
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'success' => true,
                 'gestion' => $gestion
-            ]);
-            
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
             // Asegurar que no se envíe nada más
             exit;
-            
+
         } catch (Exception $e) {
             // Limpiar el buffer y enviar solo JSON
             ob_clean();
-            
+
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => false,
                 'message' => $e->getMessage()
             ]);
-            
+
             // Asegurar que no se envíe nada más
             exit;
         }
     }
-    
+
     /**
      * Obtiene los productos pendientes de un cliente específico
      */
-    public function obtenerProductosPendientes() {
+    public function obtenerProductosPendientes()
+    {
         try {
             $this->verificarRol('asesor');
-            
+
             $clienteId = $this->getGet('cliente_id');
             $clienteId = $this->validarId($clienteId, 'cliente');
-            
+
             // Verificar que el cliente esté asignado al asesor
             $cliente = $this->clienteModel->getClienteById($clienteId);
             if (!$cliente || $cliente['asesor_id'] != $_SESSION['user_id']) {
                 throw new Exception('Cliente no encontrado o no asignado');
             }
-            
+
             // Obtener productos del cliente
             $productoModel = new ProductoClienteModel($this->pdo);
             $productos = $productoModel->getProductosByCliente($clienteId);
-            
+
             echo json_encode([
                 'success' => true,
                 'productos' => $productos
             ]);
-            
+
         } catch (Exception $e) {
             echo json_encode([
                 'success' => false,
@@ -1512,20 +1818,568 @@ class AsesorController extends BaseController {
             ]);
         }
     }
-    
+
+    /**
+     * Agrega información adicional al cliente (correo y teléfonos)
+     */
+    public function agregarInformacionCliente()
+    {
+        // Limpiar cualquier output previo
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        ob_start();
+
+        try {
+            // Verificar que sea un asesor
+            if ($_SESSION['user_role'] !== 'asesor') {
+                throw new Exception("Acceso denegado.");
+            }
+
+            // Obtener datos del JSON
+            $rawInput = file_get_contents('php://input');
+            $input = json_decode($rawInput, true);
+
+            // Log para debugging
+            error_log("agregarInformacionCliente - Raw input: " . $rawInput);
+            error_log("agregarInformacionCliente - Parsed input: " . print_r($input, true));
+
+            if (!$input) {
+                throw new Exception("Datos no válidos.");
+            }
+
+            $clienteId = $input['cliente_id'] ?? null;
+            $email = $input['email'] ?? null;
+            $telefonos = $input['telefonos'] ?? [];
+
+            // Log para debugging
+            error_log("agregarInformacionCliente - Email recibido: " . ($email ?? 'NULL') . " (tipo: " . gettype($email) . ")");
+            error_log("agregarInformacionCliente - Teléfonos recibidos: " . print_r($telefonos, true));
+
+            if (!$clienteId) {
+                throw new Exception("ID de cliente no proporcionado.");
+            }
+
+            $asesorId = $_SESSION['user_id'];
+
+            // Verificar que el cliente pertenezca al asesor o que tenga acceso a la base
+            $cliente = $this->clienteModel->getClienteById($clienteId);
+            if (!$cliente) {
+                throw new Exception("Cliente no encontrado.");
+            }
+
+            // Verificar acceso (misma lógica que obtenerDetallesGestion)
+            $tieneAcceso = false;
+
+            // Verificar si el cliente está asignado directamente al asesor
+            if (isset($cliente['asesor_id']) && $cliente['asesor_id'] == $asesorId) {
+                $tieneAcceso = true;
+            }
+
+            // Verificar acceso a través de bases asignadas
+            if (!$tieneAcceso && isset($cliente['carga_excel_id'])) {
+                $sql = "SELECT 1 FROM asignaciones_base_asesor 
+                        WHERE asesor_id = ? AND carga_id = ? AND estado = 'activa' 
+                        LIMIT 1";
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute([$asesorId, $cliente['carga_excel_id']]);
+                $baseAsignada = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($baseAsignada) {
+                    $tieneAcceso = true;
+                }
+            }
+
+            if (!$tieneAcceso) {
+                throw new Exception("No tienes acceso a este cliente.");
+            }
+
+            // Preparar datos para actualizar
+            $datosActualizar = [];
+
+            // Actualizar correo si se proporciona (reemplaza el existente)
+            // Verificar si el email está presente en el input
+            if (isset($input['email']) && $input['email'] !== null) {
+                $emailLimpio = trim($email ?? '');
+
+                error_log("agregarInformacionCliente - Email después de trim: '" . $emailLimpio . "' (longitud: " . strlen($emailLimpio) . ")");
+
+                // Si el email tiene valor, validar y actualizar (SIEMPRE reemplaza)
+                if (!empty($emailLimpio)) {
+                    // Validar formato de email
+                    if (filter_var($emailLimpio, FILTER_VALIDATE_EMAIL)) {
+                        $datosActualizar['email'] = $emailLimpio;
+                        error_log("agregarInformacionCliente - ✅ Email válido, se actualizará: " . $emailLimpio);
+                    } else {
+                        error_log("agregarInformacionCliente - ❌ Email con formato inválido: " . $emailLimpio);
+                        throw new Exception("El formato del correo electrónico no es válido.");
+                    }
+                } else {
+                    error_log("agregarInformacionCliente - ⚠️ Email vacío después de trim, no se actualizará");
+                }
+            } else {
+                error_log("agregarInformacionCliente - ⚠️ Email no presente en input o es null");
+            }
+
+            error_log("agregarInformacionCliente - Datos a actualizar: " . print_r($datosActualizar, true));
+
+            // Agregar teléfonos (sin eliminar los existentes)
+            $telefonoActual = trim($cliente['telefono'] ?? '');
+            $celular2Actual = trim($cliente['celular2'] ?? '');
+
+            // Si hay teléfonos nuevos, agregarlos
+            if (!empty($telefonos)) {
+                // Filtrar teléfonos vacíos y limpiar espacios
+                $telefonosLimpios = array_filter(array_map('trim', $telefonos), function ($tel) {
+                    return !empty($tel);
+                });
+
+                if (!empty($telefonosLimpios)) {
+                    $telefonosArray = array_values($telefonosLimpios); // Reindexar array
+
+                    // Prioridad: llenar campos vacíos primero
+                    if (empty($telefonoActual)) {
+                        // Si telefono está vacío, usar el primer teléfono nuevo
+                        $datosActualizar['telefono'] = $telefonosArray[0];
+
+                        // Si hay más teléfonos y celular2 está vacío, usar el segundo
+                        if (count($telefonosArray) > 1 && empty($celular2Actual)) {
+                            $datosActualizar['celular2'] = $telefonosArray[1];
+                        } elseif (count($telefonosArray) > 1) {
+                            // Si celular2 ya tiene valor, reemplazarlo con el nuevo (o concatenar)
+                            // Por ahora, reemplazamos para que se guarden los nuevos teléfonos
+                            $datosActualizar['celular2'] = $telefonosArray[1];
+                        }
+                    } elseif (empty($celular2Actual)) {
+                        // Si telefono tiene valor pero celular2 está vacío, usar el primer teléfono nuevo
+                        $datosActualizar['celular2'] = $telefonosArray[0];
+
+                        // Si hay más teléfonos, actualizar también telefono con el nuevo
+                        // (esto permite actualizar ambos campos si se proporcionan múltiples teléfonos)
+                        if (count($telefonosArray) > 1) {
+                            $datosActualizar['telefono'] = $telefonosArray[1];
+                        }
+                    } else {
+                        // Si ambos campos ya tienen valores, reemplazar con los nuevos teléfonos
+                        // Esto permite actualizar los teléfonos existentes
+                        $datosActualizar['telefono'] = $telefonosArray[0];
+                        if (count($telefonosArray) > 1) {
+                            $datosActualizar['celular2'] = $telefonosArray[1];
+                        } else {
+                            // Si solo hay un teléfono nuevo, reemplazar telefono y dejar celular2 como está
+                            // O reemplazar celular2 si el usuario quiere
+                            $datosActualizar['celular2'] = $telefonosArray[0];
+                        }
+                    }
+                }
+            }
+
+            // Actualizar cliente si hay datos para actualizar
+            if (!empty($datosActualizar)) {
+                $actualizado = $this->clienteModel->actualizarCliente($clienteId, $datosActualizar);
+
+                if (!$actualizado) {
+                    throw new Exception("Error al actualizar la información del cliente.");
+                }
+            }
+
+            // Limpiar buffer y enviar respuesta
+            ob_clean();
+
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => true,
+                'message' => 'Información guardada exitosamente.'
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            exit;
+
+        } catch (Exception $e) {
+            ob_clean();
+
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+
+            exit;
+        }
+    }
+
     /**
      * Registra automáticamente la actividad de canales autorizados
      */
-    private function registrarActividadCanales($gestionId, $clienteId, $asesorId, $canales) {
+    private function registrarActividadCanales($gestionId, $clienteId, $asesorId, $canales)
+    {
         try {
             require_once 'models/ActividadProductoModel.php';
             $actividadModel = new ActividadProductoModel($this->pdo);
-            
+
             $actividadModel->registrarCanalesAutorizados($gestionId, $clienteId, $asesorId, $canales);
-            
+
         } catch (Exception $e) {
             error_log("Error en registrarActividadCanales: " . $e->getMessage());
         }
     }
-}
 
+    /**
+     * Registra un break o descanso del asesor
+     */
+    public function registrarBreak()
+    {
+        $this->limpiarOutputBuffers();
+        $this->configurarHeadersJSON();
+
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                $this->enviarJSONError('Método no permitido', 'METHOD_NOT_ALLOWED', 405);
+                return;
+            }
+
+            $asesorId = $_SESSION['user_id'] ?? null;
+            if (!$asesorId) {
+                $this->enviarJSONError('Usuario no autenticado', 'UNAUTHORIZED', 401);
+                return;
+            }
+
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!$input || !isset($input['tipo']) || !isset($input['accion'])) {
+                $this->enviarJSONError('Datos incompletos', 'INVALID_DATA', 400);
+                return;
+            }
+
+            $tipo = $input['tipo'];
+            $accion = $input['accion']; // 'iniciar' o 'finalizar'
+
+            $tiposPermitidos = ['baño', 'almuerzo', 'break', 'mantenimiento', 'actividad_extra', 'pausa_activa'];
+            if (!in_array($tipo, $tiposPermitidos)) {
+                $this->enviarJSONError('Tipo de break no válido', 'INVALID_TYPE', 400);
+                return;
+            }
+
+            if ($accion === 'iniciar') {
+                // Verificar si ya hay un break activo
+                $breakActivo = $this->verificarBreakActivo($asesorId);
+                if ($breakActivo) {
+                    $this->enviarJSONError('Ya tienes un descanso activo. Finaliza el descanso actual antes de iniciar uno nuevo.', 'BREAK_ACTIVE', 400);
+                    return;
+                }
+
+                // Registrar inicio de break
+                $resultado = $this->registrarInicioBreak($asesorId, $tipo);
+
+                if ($resultado) {
+                    // Registrar en logs del sistema
+                    $this->registrarLogBreak($asesorId, $tipo, 'iniciado');
+
+                    $this->enviarJSONExito([
+                        'message' => 'Descanso iniciado correctamente',
+                        'tipo' => $tipo,
+                        'fecha_inicio' => date('Y-m-d H:i:s')
+                    ]);
+                } else {
+                    $this->enviarJSONError('Error al registrar el descanso', 'DB_ERROR', 500);
+                }
+
+            } elseif ($accion === 'finalizar') {
+                // Verificar si hay un break activo
+                $breakActivo = $this->verificarBreakActivo($asesorId);
+                if (!$breakActivo || $breakActivo['tipo'] !== $tipo) {
+                    $this->enviarJSONError('No hay un descanso activo de este tipo para finalizar', 'NO_BREAK_ACTIVE', 400);
+                    return;
+                }
+
+                // Registrar fin de break
+                $resultado = $this->registrarFinBreak($asesorId, $tipo, $breakActivo['id']);
+
+                if ($resultado) {
+                    // Registrar en logs del sistema
+                    $this->registrarLogBreak($asesorId, $tipo, 'finalizado');
+
+                    $this->enviarJSONExito([
+                        'message' => 'Descanso finalizado correctamente',
+                        'tipo' => $tipo,
+                        'fecha_fin' => date('Y-m-d H:i:s'),
+                        'duracion' => $resultado['duracion'] ?? 0
+                    ]);
+                } else {
+                    $this->enviarJSONError('Error al finalizar el descanso', 'DB_ERROR', 500);
+                }
+
+            } else {
+                $this->enviarJSONError('Acción no válida', 'INVALID_ACTION', 400);
+            }
+
+        } catch (Exception $e) {
+            error_log("Error en registrarBreak: " . $e->getMessage());
+            $this->enviarJSONError('Error al procesar la solicitud: ' . $e->getMessage(), 'GENERAL_ERROR', 500);
+        }
+    }
+
+    /**
+     * Verifica si hay un break activo para el asesor
+     */
+    private function verificarBreakActivo($asesorId)
+    {
+        try {
+            $sql = "SELECT id, tipo, fecha_inicio 
+                    FROM breaks_asesor 
+                    WHERE asesor_id = ? AND fecha_fin IS NULL 
+                    ORDER BY fecha_inicio DESC 
+                    LIMIT 1";
+
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$asesorId]);
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+
+        } catch (Exception $e) {
+            error_log("Error en verificarBreakActivo: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Registra el inicio de un break
+     */
+    private function registrarInicioBreak($asesorId, $tipo)
+    {
+        try {
+            // Verificar si la tabla existe, si no, crearla
+            $this->crearTablaBreaksSiNoExiste();
+
+            $sql = "INSERT INTO breaks_asesor (asesor_id, tipo, fecha_inicio) 
+                    VALUES (?, ?, NOW())";
+
+            $stmt = $this->pdo->prepare($sql);
+            return $stmt->execute([$asesorId, $tipo]);
+
+        } catch (Exception $e) {
+            error_log("Error en registrarInicioBreak: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Registra el fin de un break
+     */
+    private function registrarFinBreak($asesorId, $tipo, $breakId)
+    {
+        try {
+            // Calcular duración en segundos primero para mayor precisión
+            // Luego convertir a minutos con decimales para guardar en la BD
+            $sql = "UPDATE breaks_asesor 
+                    SET fecha_fin = NOW(),
+                        duracion_minutos = TIMESTAMPDIFF(SECOND, fecha_inicio, NOW()) / 60.0
+                    WHERE id = ? AND asesor_id = ? AND tipo = ?";
+
+            $stmt = $this->pdo->prepare($sql);
+            $resultado = $stmt->execute([$breakId, $asesorId, $tipo]);
+
+            if ($resultado) {
+                // Obtener la duración (ahora con decimales)
+                $sqlDuracion = "SELECT duracion_minutos FROM breaks_asesor WHERE id = ?";
+                $stmtDuracion = $this->pdo->prepare($sqlDuracion);
+                $stmtDuracion->execute([$breakId]);
+                $duracion = $stmtDuracion->fetch(PDO::FETCH_ASSOC);
+
+                return [
+                    'success' => true,
+                    'duracion' => $duracion['duracion_minutos'] ?? 0
+                ];
+            }
+
+            return false;
+
+        } catch (Exception $e) {
+            error_log("Error en registrarFinBreak: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Crea la tabla de breaks si no existe
+     */
+    private function crearTablaBreaksSiNoExiste()
+    {
+        try {
+            $sql = "CREATE TABLE IF NOT EXISTS breaks_asesor (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                asesor_id INT NOT NULL,
+                tipo ENUM('baño', 'almuerzo', 'break', 'mantenimiento', 'actividad_extra', 'pausa_activa') NOT NULL,
+                fecha_inicio DATETIME NOT NULL,
+                fecha_fin DATETIME NULL,
+                duracion_minutos DECIMAL(10,2) NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_asesor (asesor_id),
+                INDEX idx_fecha_inicio (fecha_inicio),
+                INDEX idx_tipo (tipo),
+                FOREIGN KEY (asesor_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+            $this->pdo->exec($sql);
+
+        } catch (Exception $e) {
+            error_log("Error al crear tabla breaks_asesor: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Registra el break en los logs del sistema
+     */
+    private function registrarLogBreak($asesorId, $tipo, $accion)
+    {
+        try {
+            require_once 'models/ActividadProductoModel.php';
+            $actividadModel = new ActividadProductoModel($this->pdo);
+
+            $actividadModel->registrarLogSistema([
+                'tipo_evento' => 'break_asesor',
+                'entidad_afectada' => 'asesor',
+                'entidad_id' => $asesorId,
+                'usuario_id' => $asesorId,
+                'accion' => $accion,
+                'descripcion' => "Break de tipo '{$tipo}' {$accion}",
+                'datos_nuevos' => json_encode(['tipo' => $tipo, 'accion' => $accion])
+            ]);
+
+        } catch (Exception $e) {
+            error_log("Error en registrarLogBreak: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Obtiene el break activo del asesor (si existe)
+     */
+    public function obtenerBreakActivo()
+    {
+        $this->limpiarOutputBuffers();
+        $this->configurarHeadersJSON();
+
+        try {
+            $asesorId = $_SESSION['user_id'] ?? null;
+            if (!$asesorId) {
+                $this->enviarJSONError('Usuario no autenticado', 'UNAUTHORIZED', 401);
+                return;
+            }
+
+            $breakActivo = $this->verificarBreakActivo($asesorId);
+            
+            if ($breakActivo) {
+                // Mapear tipos de break a nombres legibles
+                $tiposBreak = [
+                    'baño' => 'Baño',
+                    'almuerzo' => 'Almuerzo',
+                    'break' => 'Break',
+                    'mantenimiento' => 'Mantenimiento',
+                    'actividad_extra' => 'Actividad Extra',
+                    'pausa_activa' => 'Pausa Activa'
+                ];
+                
+                $this->enviarJSONExito([
+                    'break_activo' => true,
+                    'tipo' => $breakActivo['tipo'],
+                    'tipo_nombre' => $tiposBreak[$breakActivo['tipo']] ?? $breakActivo['tipo'],
+                    'fecha_inicio' => $breakActivo['fecha_inicio'],
+                    'id' => $breakActivo['id']
+                ]);
+            } else {
+                $this->enviarJSONExito([
+                    'break_activo' => false
+                ]);
+            }
+
+        } catch (Exception $e) {
+            error_log("Error en obtenerBreakActivo: " . $e->getMessage());
+            $this->enviarJSONError('Error al verificar el break activo: ' . $e->getMessage(), 'GENERAL_ERROR', 500);
+        }
+    }
+
+    /**
+     * Verifica la contraseña para desbloquear la pantalla
+     */
+    public function verificarContrasenaDesbloqueo()
+    {
+        $this->limpiarOutputBuffers();
+        $this->configurarHeadersJSON();
+
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                $this->enviarJSONError('Método no permitido', 'METHOD_NOT_ALLOWED', 405);
+                return;
+            }
+
+            $asesorId = $_SESSION['user_id'] ?? null;
+            if (!$asesorId) {
+                $this->enviarJSONError('Usuario no autenticado', 'UNAUTHORIZED', 401);
+                return;
+            }
+
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!$input || !isset($input['contrasena'])) {
+                $this->enviarJSONError('Contraseña requerida', 'INVALID_DATA', 400);
+                return;
+            }
+
+            $contrasena = trim($input['contrasena']);
+            if (empty($contrasena)) {
+                $this->enviarJSONError('La contraseña no puede estar vacía', 'INVALID_DATA', 400);
+                return;
+            }
+
+            // Verificar contraseña
+            $esValida = $this->usuarioModel->verificarContrasena($asesorId, $contrasena);
+
+            if ($esValida) {
+                $this->enviarJSONExito([
+                    'message' => 'Contraseña correcta',
+                    'desbloqueado' => true
+                ]);
+            } else {
+                $this->enviarJSONError('Contraseña incorrecta', 'INVALID_PASSWORD', 401);
+            }
+
+        } catch (Exception $e) {
+            error_log("Error en verificarContrasenaDesbloqueo: " . $e->getMessage());
+            $this->enviarJSONError('Error al verificar la contraseña: ' . $e->getMessage(), 'GENERAL_ERROR', 500);
+        }
+    }
+
+    /**
+     * Verifica el estado actual del break (para persistencia al recargar)
+     */
+    public function checkBreakStatus()
+    {
+        $this->limpiarOutputBuffers();
+        $this->configurarHeadersJSON();
+
+        try {
+            $asesorId = $_SESSION['user_id'] ?? null;
+            if (!$asesorId) {
+                $this->enviarJSONError('Usuario no autenticado', 'UNAUTHORIZED', 401);
+                return;
+            }
+
+            $breakActivo = $this->verificarBreakActivo($asesorId);
+
+            if ($breakActivo) {
+                $this->enviarJSONExito([
+                    'active' => true,
+                    'tipo' => $breakActivo['tipo'],
+                    'fecha_inicio' => $breakActivo['fecha_inicio']
+                ]);
+            } else {
+                $this->enviarJSONExito([
+                    'active' => false
+                ]);
+            }
+
+        } catch (Exception $e) {
+            error_log("Error en checkBreakStatus: " . $e->getMessage());
+            $this->enviarJSONError('Error al verificar estado', 'SERVER_ERROR', 500);
+        }
+    }
+
+
+}

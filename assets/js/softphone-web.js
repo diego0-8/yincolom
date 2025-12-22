@@ -8,7 +8,7 @@ class WebRTCSoftphone {
     constructor(config) {
         // Validar configuración según la guía
         this.validateConfig(config);
-        
+
         this.config = config;
         this.userAgent = null;
         this.registerer = null; // Registerer para mantener el registro SIP activo
@@ -27,68 +27,128 @@ class WebRTCSoftphone {
         this.conferenceCalls = []; // Array de llamadas en conferencia
         this.isInConference = false; // Indica si hay una conferencia activa
         this.preferredAudioDeviceId = null; // ID del dispositivo de audio preferido
-        
+        this.isAcceptingCall = false; // Bandera para prevenir múltiples llamadas simultáneas a acceptIncomingCall
+        this.isHangingUp = false; // Bandera para prevenir múltiples llamadas simultáneas a hangup
+        this.audioUnlocked = false; // Bandera para indicar si el audio ha sido desbloqueado por interacción del usuario
+
         // Verificar que SIP.js esté disponible
         if (typeof SIP === 'undefined') {
             console.error('❌ [WebRTC Softphone] SIP.js no está cargado');
             console.error('❌ [WebRTC Softphone] Verifica que sip.min.js se haya cargado antes de este script');
             throw new Error('SIP.js no está disponible. Asegúrate de cargar sip.min.js antes de este script.');
         }
-        
+
         if (this.config.debug_mode) {
             console.log('✅ [WebRTC Softphone] SIP.js cargado correctamente');
             console.log('✅ [WebRTC Softphone] Inicializando softphone...');
         }
-        
+
         // Inicializar UI
         this.initUI();
-        
+
+        // Desbloquear audio en la primera interacción del usuario
+        this.setupAudioUnlock();
+
         // Conectar al servidor SIP
         this.connect();
     }
-    
+
+    /**
+     * Configurar desbloqueo de audio en la primera interacción del usuario
+     * Los navegadores modernos requieren interacción del usuario antes de reproducir audio automáticamente
+     */
+    setupAudioUnlock() {
+        // Crear elementos de audio silenciosos para desbloquear
+        if (!this.incomingCallAudio) {
+            this.incomingCallAudio = new Audio('assets/audio/ringtone.mp3');
+            this.incomingCallAudio.loop = true;
+            this.incomingCallAudio.volume = 0.7;
+            this.incomingCallAudio.preload = 'auto';
+        }
+
+        if (!this.ringbackAudio) {
+            this.ringbackAudio = new Audio('assets/audio/ringback.mp3');
+            this.ringbackAudio.loop = true;
+            this.ringbackAudio.volume = 0.5;
+            this.ringbackAudio.preload = 'auto';
+        }
+
+        // Función para desbloquear audio
+        const unlockAudio = async () => {
+            if (this.audioUnlocked) return;
+
+            try {
+                // Intentar reproducir y pausar inmediatamente para "unlock" el audio
+                await this.incomingCallAudio.play();
+                this.incomingCallAudio.pause();
+                this.incomingCallAudio.currentTime = 0;
+
+                await this.ringbackAudio.play();
+                this.ringbackAudio.pause();
+                this.ringbackAudio.currentTime = 0;
+
+                this.audioUnlocked = true;
+
+                if (this.config.debug_mode) {
+                    console.log('✅ [WebRTC Softphone] Audio desbloqueado por interacción del usuario');
+                }
+            } catch (error) {
+                // Silenciar el error, es normal si aún no hay interacción
+                if (this.config.debug_mode) {
+                    console.log('ℹ️ [WebRTC Softphone] Audio aún bloqueado, esperando interacción del usuario');
+                }
+            }
+        };
+
+        // Escuchar eventos de interacción del usuario
+        const events = ['click', 'touchstart', 'keydown', 'mousedown'];
+        events.forEach(eventType => {
+            document.addEventListener(eventType, unlockAudio, { once: true, passive: true });
+        });
+    }
+
     /**
      * Validar configuración según la guía
      */
     validateConfig(config) {
         const errors = [];
         const warnings = [];
-        
+
         // Validar extensión
         if (!config.extension || config.extension.trim() === '') {
             errors.push('Extension está vacía o no definida');
         }
-        
+
         // Validar password
         if (!config.password || config.password.trim() === '') {
             errors.push('Password está vacía o no definida');
         }
-        
+
         // Validar WSS server
         if (!config.wss_server || config.wss_server.trim() === '') {
             errors.push('WSS Server está vacío o no definido');
         } else if (!config.wss_server.startsWith('wss://') && !config.wss_server.startsWith('ws://')) {
             warnings.push('WSS Server debe comenzar con wss:// o ws://');
         }
-        
+
         // Validar SIP domain
         if (!config.sip_domain || config.sip_domain.trim() === '') {
             errors.push('SIP Domain está vacío o no definido');
         }
-        
+
         // Mostrar errores
         if (errors.length > 0) {
             console.error('❌ [WebRTC Softphone] Errores de configuración:');
             errors.forEach(error => console.error('   -', error));
             throw new Error('Configuración inválida: ' + errors.join(', '));
         }
-        
+
         // Mostrar advertencias
         if (warnings.length > 0 && config.debug_mode) {
             console.warn('⚠️ [WebRTC Softphone] Advertencias de configuración:');
             warnings.forEach(warning => console.warn('   -', warning));
         }
-        
+
         if (config.debug_mode) {
             console.log('✅ [WebRTC Softphone] Configuración validada correctamente');
             console.log('📝 [WebRTC Softphone] Configuración:', {
@@ -100,7 +160,7 @@ class WebRTCSoftphone {
             });
         }
     }
-    
+
     /**
      * Inicializar la interfaz de usuario del softphone
      */
@@ -110,7 +170,7 @@ class WebRTCSoftphone {
             console.error('❌ No se encontró el contenedor #webrtc-softphone');
             return;
         }
-        
+
         // Crear el HTML del softphone
         container.innerHTML = `
             <div class="softphone-header">
@@ -237,24 +297,24 @@ class WebRTCSoftphone {
                 </div>
             </div>
         `;
-        
+
         // Configurar eventos del dialpad
         this.setupDialpadEvents();
-        
+
         // Configurar eventos de teclado para marcar con el teclado físico
         this.setupKeyboardEvents();
-        
+
         // Asegurar que tenga la clase inline
         container.classList.add('inline');
     }
-    
+
     /**
      * Configurar eventos del dialpad
      */
     setupDialpadEvents() {
         const dialpad = document.getElementById('dialpad');
         if (!dialpad) return;
-        
+
         dialpad.addEventListener('click', (e) => {
             const btn = e.target.closest('.dialpad-btn');
             if (btn) {
@@ -263,7 +323,7 @@ class WebRTCSoftphone {
             }
         });
     }
-    
+
     /**
      * Configurar eventos de teclado para marcar con el teclado físico
      */
@@ -278,20 +338,20 @@ class WebRTCSoftphone {
                 activeElement.isContentEditable ||
                 activeElement.closest('.softphone-modal')
             );
-            
+
             // Ignorar si hay una llamada en curso
             if (this.currentCall) {
                 return;
             }
-            
+
             // Si hay un input activo, no procesar las teclas
             if (isInputActive) {
                 return;
             }
-            
+
             // Capturar números del teclado (0-9, *, #)
             const key = e.key;
-            
+
             // Números del 0 al 9
             if (key >= '0' && key <= '9') {
                 e.preventDefault();
@@ -333,12 +393,12 @@ class WebRTCSoftphone {
                 }
             }
         });
-        
+
         if (this.config.debug_mode) {
             console.log('⌨️ [WebRTC Softphone] Eventos de teclado configurados');
         }
     }
-    
+
     /**
      * Conectar al servidor SIP
      */
@@ -347,45 +407,45 @@ class WebRTCSoftphone {
             if (this.config.debug_mode) {
                 console.log('🔌 Conectando al servidor SIP...', this.config);
             }
-            
+
             // Validar configuración
             if (!this.config.extension || !this.config.password) {
                 throw new Error('Extensión o contraseña SIP no configuradas');
             }
-            
+
             if (!this.config.wss_server || !this.config.sip_domain) {
                 throw new Error('Servidor WSS o dominio SIP no configurados');
             }
-            
+
             // Configurar servidores ICE
             const iceServers = this.config.iceServers || [];
             if (iceServers.length === 0) {
                 console.warn('⚠️ No hay servidores ICE configurados');
             }
-            
+
             // Crear URI del usuario usando SIP.UserAgent.makeURI (igual que APEX2)
             const uriString = `sip:${this.config.extension}@${this.config.sip_domain}`;
-            
+
             if (typeof SIP === 'undefined' || typeof SIP.UserAgent === 'undefined') {
                 throw new Error('SIP.js no está cargado');
             }
-            
+
             if (typeof SIP.UserAgent.makeURI !== 'function') {
                 throw new Error('SIP.UserAgent.makeURI() no está disponible');
             }
-            
+
             let userURI = SIP.UserAgent.makeURI(uriString);
             if (!userURI) {
                 throw new Error('No se pudo crear el URI del usuario');
             }
-            
+
             // Parchear URI para agregar método clone() si no lo tiene (igual que APEX2)
             userURI = this._patchUriClone(userURI);
-            
+
             if (this.config.debug_mode) {
                 console.log('✅ [WebRTC Softphone] URI del usuario parchado:', userURI.toString());
             }
-            
+
             // Configuración del UserAgent optimizada para Issabel/Asterisk
             // Basada en APEX2 que funciona correctamente - NO usar register: true
             // El registro se hace automáticamente cuando el transporte se conecta
@@ -408,7 +468,9 @@ class WebRTCSoftphone {
                         iceServers: iceServers,
                         iceTransportPolicy: 'all', // Permitir tanto STUN como TURN
                         bundlePolicy: 'max-bundle', // Agrupar audio/video en un solo transporte
-                        rtcpMuxPolicy: 'require' // Requerir RTCP multiplexing
+                        // CRÍTICO: 'negotiate' es necesario si el servidor (Asterisk/Issabel) no envía 'a=rtcp-mux' en su respuesta.
+                        // Si se usa 'require' y el servidor no responde con mux, el navegador bloqueará la llamada con "InvalidAccessError".
+                        rtcpMuxPolicy: 'negotiate'
                     }
                 },
                 delegate: {
@@ -422,7 +484,7 @@ class WebRTCSoftphone {
                     }
                 }
             };
-            
+
             // Logs detallados de configuración
             console.log('🔧 [WebRTC Softphone] Configuración completa del UserAgent:');
             console.log('  📞 URI String:', uriString);
@@ -434,33 +496,33 @@ class WebRTCSoftphone {
             // No hay register: true (igual que APEX2)
             console.log('  🧊 ICE Servers:', iceServers.length);
             console.log('  👤 Display Name:', userAgentOptions.displayName);
-            
+
             // Validar valores críticos antes de continuar
             if (!this.config.extension || this.config.extension.trim() === '') {
                 console.error('❌ [WebRTC Softphone] ERROR CRÍTICO: Extension está vacía');
                 throw new Error('La extensión SIP no está configurada. Verifica la base de datos.');
             }
-            
+
             if (!this.config.password || this.config.password.trim() === '') {
                 console.error('❌ [WebRTC Softphone] ERROR CRÍTICO: Password está vacía');
                 throw new Error('La contraseña SIP no está configurada. Verifica la base de datos.');
             }
-            
+
             if (!this.config.wss_server || this.config.wss_server.trim() === '') {
                 console.error('❌ [WebRTC Softphone] ERROR CRÍTICO: WSS Server está vacío');
                 throw new Error('El servidor WSS no está configurado. Verifica config/asterisk.php');
             }
-            
+
             if (!this.config.sip_domain || this.config.sip_domain.trim() === '') {
                 console.error('❌ [WebRTC Softphone] ERROR CRÍTICO: SIP Domain está vacío');
                 throw new Error('El dominio SIP no está configurado. Verifica config/asterisk.php');
             }
-            
+
             console.log('✅ [WebRTC Softphone] Todos los valores críticos están presentes');
-            
+
             // Los servidores ICE ya están configurados en sessionDescriptionHandlerFactoryOptions (líneas 309 y 311-316)
             // No es necesario agregarlos nuevamente aquí
-            
+
             // Configuración adicional para debug
             if (this.config.debug_mode) {
                 console.log('🔧 [WebRTC Softphone] Configuración UserAgent:', {
@@ -471,10 +533,10 @@ class WebRTCSoftphone {
                     iceServers: iceServers.length
                 });
             }
-            
+
             // Crear UserAgent (igual que APEX2 - sin register: true)
             this.userAgent = new SIP.UserAgent(userAgentOptions);
-            
+
             // CRÍTICO PARA PJSIP: Asignar también directamente onInvite al UserAgent (igual que APEX2)
             this.userAgent.onInvite = (invitation) => {
                 if (this.config.debug_mode) {
@@ -484,13 +546,13 @@ class WebRTCSoftphone {
                     this.handleIncomingCall(invitation);
                 }
             };
-            
+
             // Configurar eventos del transporte (igual que APEX2)
             this.setupUserAgentEvents();
-            
+
             // Iniciar conexión (igual que APEX2 - el registro se hace automáticamente)
             this.updateStatus('connecting', 'Conectando...');
-            
+
             if (this.config.debug_mode) {
                 console.log('🔄 [WebRTC Softphone] Iniciando UserAgent...');
                 console.log('📝 [WebRTC Softphone] Configuración de conexión:', {
@@ -500,14 +562,14 @@ class WebRTCSoftphone {
                     sip_domain: this.config.sip_domain
                 });
             }
-            
+
             this.userAgent.start()
                 .then(() => {
                     if (this.config.debug_mode) {
                         console.log('✅ [WebRTC Softphone] UserAgent iniciado correctamente');
                         console.log('   UserAgent state:', this.userAgent.state);
                     }
-                    
+
                     // Verificar estado del transporte
                     if (this.userAgent.transport) {
                         if (this.config.debug_mode) {
@@ -520,13 +582,13 @@ class WebRTCSoftphone {
                             }
                         }
                     }
-                    
+
                     // CRÍTICO: Crear Registerer para mantener el registro SIP activo
                     // Sin esto, el servidor cierra la conexión porque no hay registro
                     if (this.config.debug_mode) {
                         console.log('📝 [WebRTC Softphone] Creando Registerer para mantener registro SIP activo...');
                     }
-                    
+
                     try {
                         // Crear URI del registrar (debe ser un objeto URI, no un string)
                         let registrarURI = null;
@@ -546,18 +608,18 @@ class WebRTCSoftphone {
                                 registrarURI = registrarUriString;
                             }
                         }
-                        
+
                         // Crear Registerer con las credenciales
                         this.registerer = new SIP.Registerer(this.userAgent, {
                             registrar: registrarURI
                         });
-                        
+
                         // Escuchar cambios de estado del registro
                         this.registerer.stateChange.addListener((newState) => {
                             if (this.config.debug_mode) {
                                 console.log('📝 [WebRTC Softphone] Estado del registro:', newState);
                             }
-                            
+
                             if (newState === SIP.RegistererState.Registered) {
                                 this.isRegistered = true;
                                 this.updateStatus('connected', 'En línea');
@@ -575,7 +637,7 @@ class WebRTCSoftphone {
                                 }
                             }
                         });
-                        
+
                         // Iniciar el registro
                         return this.registerer.register({
                             requestDelegate: {
@@ -616,7 +678,7 @@ class WebRTCSoftphone {
                         console.log('   3. Que no haya firewalls bloqueando los mensajes SIP');
                         console.log('   4. Que el transporte WebSocket permanezca conectado');
                         console.log('   5. Que el servidor esté enviando INVITEs al WebSocket correcto');
-                        
+
                         // Exponer el UserAgent globalmente para diagnóstico
                         window.sipUserAgent = this.userAgent;
                         window.sipRegisterer = this.registerer;
@@ -633,20 +695,20 @@ class WebRTCSoftphone {
                     this.updateStatus('disconnected', 'Error de conexión');
                     this.showError('No se pudo conectar al servidor SIP. Verifica la configuración.');
                 });
-                
+
         } catch (error) {
             console.error('❌ Error al conectar:', error);
             this.updateStatus('disconnected', 'Error de conexión');
             this.showError('Error al inicializar el softphone: ' + error.message);
         }
     }
-    
+
     /**
      * Configurar eventos del UserAgent (igual que APEX2)
      */
     setupUserAgentEvents() {
         if (!this.userAgent) return;
-        
+
         // CRÍTICO: Agregar listener para el transporte para detectar desconexiones (igual que APEX2)
         if (this.userAgent.transport) {
             // Listener para cambios de estado del transporte (igual que APEX2)
@@ -670,7 +732,7 @@ class WebRTCSoftphone {
                     this.updateStatus('disconnected', 'Desconectado');
                 }
             });
-            
+
             // Listener para eventos del WebSocket directamente (igual que APEX2)
             if (this.userAgent.transport.ws) {
                 this.userAgent.transport.ws.addEventListener('close', (event) => {
@@ -681,7 +743,7 @@ class WebRTCSoftphone {
                             wasClean: event.wasClean
                         });
                     }
-                    
+
                     // Código 1000 = Normal Closure (cierre normal del servidor)
                     if (event.code === 1000) {
                         if (this.config.debug_mode) {
@@ -689,11 +751,11 @@ class WebRTCSoftphone {
                         }
                     }
                 });
-                
+
                 this.userAgent.transport.ws.addEventListener('error', (error) => {
                     console.error('❌ [WebRTC Softphone] Error en WebSocket:', error);
                 });
-                
+
                 // DIAGNÓSTICO: Interceptar todos los mensajes WebSocket entrantes para ver INVITEs (igual que APEX2)
                 if (this.config.debug_mode) {
                     const originalOnMessage = this.userAgent.transport.ws.onmessage;
@@ -704,7 +766,7 @@ class WebRTCSoftphone {
                                 console.log('🔔 [WebRTC Softphone] ===== INVITE ENTRANTE EN WEBSOCKET RAW =====');
                                 console.log('   ⚠️ ESTE ES UN INVITE ENTRANTE REAL');
                                 console.log('   📝 Datos recibidos:', event.data.substring(0, 1000) + (event.data.length > 1000 ? '...' : ''));
-                                
+
                                 // Extraer información del INVITE
                                 const fromMatch = event.data.match(/From:\s*[^<]*<sip:(\d+)@/);
                                 const toMatch = event.data.match(/To:\s*[^<]*<sip:(\d+)@/);
@@ -712,7 +774,7 @@ class WebRTCSoftphone {
                                 if (fromMatch) console.log('   📞 Desde (llamante):', fromMatch[1]);
                                 if (toMatch) console.log('   📞 Hacia (destino):', toMatch[1]);
                                 if (callIdMatch) console.log('   📞 Call-ID:', callIdMatch[1]);
-                                
+
                                 // Verificar si el INVITE es para nuestra extensión
                                 if (toMatch && toMatch[1] === this.config.extension) {
                                     console.log('   ✅ INVITE ES PARA NUESTRA EXTENSIÓN:', this.config.extension);
@@ -722,7 +784,7 @@ class WebRTCSoftphone {
                                 }
                             }
                         }
-                        
+
                         // Llamar al handler original
                         if (originalOnMessage) {
                             originalOnMessage.call(this.userAgent.transport.ws, event);
@@ -732,11 +794,11 @@ class WebRTCSoftphone {
                 }
             }
         }
-        
+
         // El delegate.onInvite ya se configuró antes de crear el UserAgent
         // No necesitamos eventos de registro porque no usamos register: true (igual que APEX2)
     }
-    
+
     /**
      * Manejar llamada entrante
      */
@@ -746,7 +808,7 @@ class WebRTCSoftphone {
             console.log('   📞 Invitation:', invitation);
             console.log('   📞 Invitation type:', typeof invitation);
         }
-        
+
         // Si ya hay una llamada en curso, rechazar la nueva
         if (this.currentCall) {
             if (this.config.debug_mode) {
@@ -755,10 +817,10 @@ class WebRTCSoftphone {
             invitation.reject();
             return;
         }
-        
+
         // Intentar obtener el número del llamante de diferentes formas (igual que APEX2)
         let caller = 'Desconocido';
-        
+
         try {
             // Método 1: Desde remoteIdentity
             if (invitation.remoteIdentity && invitation.remoteIdentity.uri) {
@@ -778,7 +840,7 @@ class WebRTCSoftphone {
                     }
                 }
             }
-            
+
             // Método 2: Desde request.from
             if (caller === 'Desconocido' && invitation.request && invitation.request.from) {
                 const fromHeader = invitation.request.from;
@@ -794,7 +856,7 @@ class WebRTCSoftphone {
                     }
                 }
             }
-            
+
             // Método 3: Desde request.headers.From
             if (caller === 'Desconocido' && invitation.request && invitation.request.headers) {
                 const fromHeader = invitation.request.headers.From;
@@ -808,7 +870,7 @@ class WebRTCSoftphone {
                     }
                 }
             }
-            
+
             // Método 4: Desde request.from.uri directamente
             if (caller === 'Desconocido' && invitation.request && invitation.request.from && invitation.request.from.uri) {
                 const uri = invitation.request.from.uri;
@@ -824,16 +886,24 @@ class WebRTCSoftphone {
                 console.warn('⚠️ [WebRTC Softphone] Error al extraer número del llamante:', error);
             }
         }
-        
+
         if (this.config.debug_mode) {
             console.log('📞 [WebRTC Softphone] Llamada entrante de:', caller);
             console.log('   📞 Caller final identificado:', caller);
         }
-        
+
         // 1. Guardar la sesión actual
         this.incomingCallInvitation = invitation;
         this.currentNumber = caller;
-        
+
+        // 1.5. Pre-adquirir mediaStream en background para respuesta más rápida al aceptar
+        // Esto se hace en paralelo sin bloquear la UI
+        this._preAcquireMediaStreamForIncomingCall().catch(err => {
+            if (this.config.debug_mode) {
+                console.log('ℹ️ [WebRTC Softphone] No se pudo pre-adquirir stream, se adquirirá al aceptar:', err);
+            }
+        });
+
         // 2. Actualizar UI - Mostrar información de llamada entrante
         try {
             this.showCallInfo(caller);
@@ -844,7 +914,7 @@ class WebRTCSoftphone {
                 console.warn('⚠️ [WebRTC Softphone] Error al actualizar UI:', error);
             }
         }
-        
+
         // 3. Mostrar notificación visual de llamada entrante (CRÍTICO - debe mostrarse)
         try {
             this.showIncomingCallNotification(caller, caller, invitation);
@@ -856,7 +926,7 @@ class WebRTCSoftphone {
             // Intentar mostrar una alerta como fallback
             alert(`📞 Llamada entrante de: ${caller}`);
         }
-        
+
         // 4. Reproducir sonido de llamada entrante (CRÍTICO - debe sonar)
         try {
             this.playIncomingCallSound();
@@ -866,14 +936,14 @@ class WebRTCSoftphone {
         } catch (error) {
             console.error('❌ [WebRTC Softphone] Error al reproducir sonido:', error);
         }
-        
+
         // 5. Configurar eventos de la llamada entrante
         invitation.stateChange.addListener((newState) => {
             const stateStr = String(newState);
             if (this.config.debug_mode) {
                 console.log('📞 [WebRTC Softphone] Estado de invitación entrante:', stateStr);
             }
-            
+
             if (stateStr === 'Terminated' || stateStr === 'Canceled') {
                 if (this.config.debug_mode) {
                     console.log('📞 [WebRTC Softphone] Llamada entrante terminada o cancelada');
@@ -881,7 +951,7 @@ class WebRTCSoftphone {
                 // Limpiar siempre, independientemente de si es la llamada actual
                 this.hideIncomingCallNotification();
                 this.stopIncomingCallSound();
-                
+
                 // Si es la llamada actual, limpiar todo
                 if (this.currentCall === invitation || this.incomingCallInvitation === invitation) {
                     this.endCall();
@@ -905,14 +975,14 @@ class WebRTCSoftphone {
                 this.startCallTimer();
                 this.hideIncomingCallNotification();
                 this.stopIncomingCallSound();
-                
+
                 // Configurar audio después de un breve delay para asegurar que el PeerConnection esté listo
                 setTimeout(() => {
                     this.setupAudioSessionForCall(invitation);
                 }, 500);
             }
         });
-        
+
         // 6. Configurar delegado para manejar la sesión de audio
         invitation.delegate = {
             onSessionDescriptionHandler: (sessionDescriptionHandler) => {
@@ -923,14 +993,14 @@ class WebRTCSoftphone {
             }
         };
     }
-    
+
     /**
      * Mostrar notificación de llamada entrante
      */
     showIncomingCallNotification(callerName, callerNumber, invitation) {
         // Crear o actualizar el modal de llamada entrante
         let notificationDiv = document.getElementById('incoming-call-notification');
-        
+
         if (!notificationDiv) {
             notificationDiv = document.createElement('div');
             notificationDiv.id = 'incoming-call-notification';
@@ -948,7 +1018,7 @@ class WebRTCSoftphone {
                 animation: slideInRight 0.3s ease-out;
             `;
             document.body.appendChild(notificationDiv);
-            
+
             // Agregar animación CSS
             const style = document.createElement('style');
             style.textContent = `
@@ -963,7 +1033,7 @@ class WebRTCSoftphone {
             `;
             document.head.appendChild(style);
         }
-        
+
         notificationDiv.innerHTML = `
             <div style="display: flex; align-items: center; gap: 15px;">
                 <div style="flex: 1;">
@@ -972,7 +1042,7 @@ class WebRTCSoftphone {
                     <div style="font-size: 14px; opacity: 0.8;">${this.escapeHtml(callerNumber)}</div>
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <button onclick="window.webrtcSoftphone?.acceptIncomingCall()" 
+                    <button id="btn-accept-call" onclick="if(window.webrtcSoftphone && !window.webrtcSoftphone.isAcceptingCall) { window.webrtcSoftphone.acceptIncomingCall(); }" 
                             style="background: white; color: #28a745; border: none; border-radius: 50%; width: 50px; height: 50px; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2); animation: pulse 1s infinite;">
                         <i class="fas fa-phone"></i>
                     </button>
@@ -983,23 +1053,23 @@ class WebRTCSoftphone {
                 </div>
             </div>
         `;
-        
+
         // Asegurar que la notificación esté visible
         notificationDiv.style.display = 'block';
         notificationDiv.style.visibility = 'visible';
         notificationDiv.style.opacity = '1';
-        
+
         // Asegurar z-index alto para que esté por encima de todo
         notificationDiv.style.zIndex = '99999';
-        
+
         // Guardar la invitación para aceptar/rechazar (ya está guardada en handleIncomingCall, pero por si acaso)
         this.incomingCallInvitation = invitation;
-        
+
         // El sonido ya se reproduce en handleIncomingCall, pero asegurémonos de que se reproduzca
         if (!this.incomingCallAudio || this.incomingCallAudio.paused) {
             this.playIncomingCallSound();
         }
-        
+
         if (this.config.debug_mode) {
             console.log('✅ [WebRTC Softphone] Notificación de llamada entrante mostrada y visible');
             console.log('   📍 Elemento display:', window.getComputedStyle(notificationDiv).display);
@@ -1007,7 +1077,7 @@ class WebRTCSoftphone {
             console.log('   📍 Elemento z-index:', window.getComputedStyle(notificationDiv).zIndex);
         }
     }
-    
+
     /**
      * Ocultar notificación de llamada entrante
      */
@@ -1018,23 +1088,132 @@ class WebRTCSoftphone {
         }
         this.stopIncomingCallSound();
         this.incomingCallInvitation = null;
+        // Resetear bandera de aceptación cuando se oculta la notificación
+        this.isAcceptingCall = false;
     }
-    
+
     /**
-     * Aceptar llamada entrante (igual que APEX2)
+     * Aceptar llamada entrante (optimizado para respuesta rápida)
      */
     async acceptIncomingCall() {
+        // Prevenir múltiples llamadas simultáneas
+        if (this.isAcceptingCall) {
+            if (this.config.debug_mode) {
+                console.warn('⚠️ [WebRTC Softphone] Ya se está procesando una aceptación de llamada');
+            }
+            return;
+        }
+
         if (!this.incomingCallInvitation) {
             console.warn('⚠️ [WebRTC Softphone] No hay llamada entrante para aceptar');
             return;
         }
-        
+
+        // Marcar que estamos procesando la aceptación
+        this.isAcceptingCall = true;
+
+        // Feedback visual inmediato - actualizar UI antes de procesar
+        const acceptButton = document.getElementById('btn-accept-call');
+        if (acceptButton) {
+            acceptButton.style.opacity = '0.6';
+            acceptButton.style.cursor = 'wait';
+            acceptButton.disabled = true;
+        }
+        this.updateCallStatus('Contestando...');
+
         try {
             if (this.config.debug_mode) {
                 console.log('✅ [WebRTC Softphone] Usuario presionó Contestar');
             }
-            
-            // Reutilizar la misma configuración robusta de ICE y Audio que usamos para llamar (igual que APEX2)
+
+            // Guardar referencia local
+            const invitation = this.incomingCallInvitation;
+            if (!invitation) {
+                console.warn('⚠️ [WebRTC Softphone] La invitación se perdió antes de aceptar');
+                this.isAcceptingCall = false;
+                this._restoreAcceptButton(acceptButton);
+                return;
+            }
+
+            // Verificar estado rápidamente (sin esperas largas)
+            let currentState;
+            try {
+                currentState = invitation.state;
+            } catch (e) {
+                console.error('❌ [WebRTC Softphone] Error al leer estado:', e);
+                this.isAcceptingCall = false;
+                this._restoreAcceptButton(acceptButton);
+                return;
+            }
+
+            if (this.config.debug_mode) {
+                console.log('📞 [WebRTC Softphone] Estado actual:', currentState);
+            }
+
+            // Si está en "Establishing", esperar solo 500ms máximo (mucho más rápido)
+            if (currentState === 'Establishing' || currentState === 3) {
+                if (this.config.debug_mode) {
+                    console.log('⏳ [WebRTC Softphone] Estado Establishing, esperando brevemente...');
+                }
+
+                // Espera más corta: máximo 500ms (5 intentos de 100ms)
+                let attempts = 0;
+                const maxAttempts = 5;
+
+                while (attempts < maxAttempts) {
+                    if (!this.incomingCallInvitation || this.incomingCallInvitation !== invitation) {
+                        console.warn('⚠️ [WebRTC Softphone] La invitación cambió');
+                        this.isAcceptingCall = false;
+                        this._restoreAcceptButton(acceptButton);
+                        return;
+                    }
+
+                    try {
+                        const state = this.incomingCallInvitation.state;
+                        if (state !== 'Establishing' && state !== 3) {
+                            currentState = state;
+                            if (this.config.debug_mode) {
+                                console.log('✅ [WebRTC Softphone] Estado válido alcanzado:', state);
+                            }
+                            break;
+                        }
+                    } catch (e) {
+                        // Continuar intentando
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+
+                // Verificar estado final
+                if (!this.incomingCallInvitation || this.incomingCallInvitation !== invitation) {
+                    console.warn('⚠️ [WebRTC Softphone] La invitación se perdió');
+                    this.isAcceptingCall = false;
+                    this._restoreAcceptButton(acceptButton);
+                    return;
+                }
+
+                try {
+                    currentState = this.incomingCallInvitation.state;
+                } catch (e) {
+                    // Continuar de todas formas
+                }
+            }
+
+            // Pre-adquirir el mediaStream ANTES de aceptar (más rápido)
+            let mediaStreamPromise = null;
+            try {
+                if (this.config.debug_mode) {
+                    console.log('🎤 [WebRTC Softphone] Pre-adquiriendo mediaStream...');
+                }
+                mediaStreamPromise = this._mediaStreamFactory();
+            } catch (e) {
+                if (this.config.debug_mode) {
+                    console.warn('⚠️ [WebRTC Softphone] Error al pre-adquirir stream, se intentará durante accept:', e);
+                }
+            }
+
+            // Configuración optimizada
             const options = {
                 sessionDescriptionHandlerOptions: {
                     constraints: {
@@ -1048,36 +1227,68 @@ class WebRTCSoftphone {
                         bundlePolicy: 'max-bundle',
                         rtcpMuxPolicy: 'require'
                     },
-                    // Pasar mediaStreamFactory que retorna el stream pre-adquirido
+                    // Usar stream pre-adquirido si está disponible, sino adquirirlo
                     mediaStreamFactory: async () => {
-                        if (this.config.debug_mode) {
-                            console.log('🎤 [WebRTC Softphone] mediaStreamFactory LLAMADA PARA CONTESTAR');
+                        if (mediaStreamPromise) {
+                            try {
+                                return await mediaStreamPromise;
+                            } catch (e) {
+                                // Si falla el pre-adquirido, adquirir nuevo
+                                return await this._mediaStreamFactory();
+                            }
                         }
-                        // Adquirir stream antes de contestar
                         return await this._mediaStreamFactory();
                     }
                 }
             };
-            
-            // Aceptar la llamada
+
+            // Aceptar la llamada (esto es rápido si el stream ya está listo)
             await this.incomingCallInvitation.accept(options);
-            
-            // Actualizar UI a "En llamada"
+
+            // Actualizar UI inmediatamente
             this.currentCall = this.incomingCallInvitation;
             this.hideIncomingCallNotification();
-            
+            this.updateCallStatus('En llamada');
+
             if (this.config.debug_mode) {
                 console.log('✅ [WebRTC Softphone] Llamada aceptada exitosamente');
             }
-            
+
+            // Resetear bandera
+            this.isAcceptingCall = false;
+            this._restoreAcceptButton(acceptButton);
+
         } catch (error) {
             console.error('❌ [WebRTC Softphone] Error al aceptar llamada:', error);
-            this.showError('Error al aceptar la llamada: ' + error.message);
+
+            // Resetear bandera
+            this.isAcceptingCall = false;
+            this._restoreAcceptButton(acceptButton);
+
+            // Mostrar error solo si no es el error de estado (ya que a veces se acepta de todas formas)
+            if (!error.message || !error.message.includes('Invalid session state')) {
+                this.showError('Error al aceptar la llamada: ' + error.message);
+            }
+
             this.hideIncomingCallNotification();
-            this.endCall();
+
+            if (this.incomingCallInvitation) {
+                this.incomingCallInvitation = null;
+            }
         }
     }
-    
+
+    /**
+     * Restaurar estado del botón de aceptar
+     */
+    _restoreAcceptButton(button) {
+        if (button) {
+            button.style.opacity = '1';
+            button.style.cursor = 'pointer';
+            button.disabled = false;
+        }
+    }
+
     /**
      * Rechazar llamada entrante
      */
@@ -1086,21 +1297,24 @@ class WebRTCSoftphone {
             console.warn('⚠️ No hay llamada entrante para rechazar');
             return;
         }
-        
+
+        // Resetear bandera de aceptación si estaba en proceso
+        this.isAcceptingCall = false;
+
         try {
             if (this.config.debug_mode) {
                 console.log('❌ Rechazando llamada entrante');
             }
-            
+
             this.incomingCallInvitation.reject();
             this.hideIncomingCallNotification();
-            
+
         } catch (error) {
             console.error('❌ Error al rechazar llamada:', error);
             this.hideIncomingCallNotification();
         }
     }
-    
+
     /**
      * Reproducir sonido de llamada entrante (ringtone.mp3)
      */
@@ -1108,22 +1322,22 @@ class WebRTCSoftphone {
         try {
             // Detener ringback si está sonando
             this.stopRingbackSound();
-            
+
             // Crear elemento de audio para el tono de llamada entrante si no existe
             if (!this.incomingCallAudio) {
                 this.incomingCallAudio = new Audio('assets/audio/ringtone.mp3');
                 this.incomingCallAudio.loop = true;
                 this.incomingCallAudio.volume = 0.7;
                 this.incomingCallAudio.preload = 'auto';
-                
+
                 if (this.config.debug_mode) {
                     console.log('🔊 [WebRTC Softphone] Elemento de audio creado para llamada entrante (ringtone.mp3)');
                 }
             }
-            
+
             // Reiniciar el audio desde el principio
             this.incomingCallAudio.currentTime = 0;
-            
+
             // Intentar reproducir
             const playPromise = this.incomingCallAudio.play();
             if (playPromise !== undefined) {
@@ -1132,25 +1346,36 @@ class WebRTCSoftphone {
                         if (this.config.debug_mode) {
                             console.log('✅ [WebRTC Softphone] Sonido de llamada entrante (ringtone.mp3) reproduciéndose');
                         }
+                        // Marcar como desbloqueado si se reproduce exitosamente
+                        this.audioUnlocked = true;
                     })
                     .catch(error => {
-                        console.warn('⚠️ [WebRTC Softphone] No se pudo reproducir el sonido de llamada entrante:', error);
-                        // Intentar forzar reproducción con un click simulado
-                        if (document.body) {
-                            document.body.click();
-                            setTimeout(() => {
-                                this.incomingCallAudio.play().catch(err => {
-                                    console.warn('⚠️ [WebRTC Softphone] Error persistente al reproducir sonido entrante:', err);
-                                });
-                            }, 100);
+                        // Solo mostrar warning si no es el error de política del navegador
+                        if (!error.message || !error.message.includes("didn't interact")) {
+                            if (this.config.debug_mode) {
+                                console.warn('⚠️ [WebRTC Softphone] No se pudo reproducir el sonido de llamada entrante:', error);
+                            }
+                        } else {
+                            // Error de política del navegador - silenciar después de la primera vez
+                            if (this.config.debug_mode) {
+                                console.log('ℹ️ [WebRTC Softphone] Audio bloqueado por política del navegador. El usuario necesita interactuar con la página primero.');
+                            }
+                        }
+
+                        // Intentar desbloquear si aún no está desbloqueado
+                        if (!this.audioUnlocked) {
+                            this.setupAudioUnlock();
                         }
                     });
             }
         } catch (error) {
-            console.error('❌ [WebRTC Softphone] Error al reproducir sonido de llamada entrante:', error);
+            // Solo mostrar error si no es el error de política del navegador
+            if (!error.message || !error.message.includes("didn't interact")) {
+                console.error('❌ [WebRTC Softphone] Error al reproducir sonido de llamada entrante:', error);
+            }
         }
     }
-    
+
     /**
      * Reproducir sonido de ringback para llamadas salientes (ringback.mp3)
      */
@@ -1158,22 +1383,22 @@ class WebRTCSoftphone {
         try {
             // Detener sonido de llamada entrante si está sonando
             this.stopIncomingCallSound();
-            
+
             // Crear elemento de audio para el ringback si no existe
             if (!this.ringbackAudio) {
                 this.ringbackAudio = new Audio('assets/audio/ringback.mp3');
                 this.ringbackAudio.loop = true;
                 this.ringbackAudio.volume = 0.6;
                 this.ringbackAudio.preload = 'auto';
-                
+
                 if (this.config.debug_mode) {
                     console.log('🔊 [WebRTC Softphone] Elemento de audio creado para ringback (ringback.mp3)');
                 }
             }
-            
+
             // Reiniciar el audio desde el principio
             this.ringbackAudio.currentTime = 0;
-            
+
             // Intentar reproducir
             const playPromise = this.ringbackAudio.play();
             if (playPromise !== undefined) {
@@ -1191,7 +1416,7 @@ class WebRTCSoftphone {
             console.error('❌ [WebRTC Softphone] Error al reproducir ringback:', error);
         }
     }
-    
+
     /**
      * Detener sonido de ringback
      */
@@ -1204,7 +1429,7 @@ class WebRTCSoftphone {
             }
         }
     }
-    
+
     /**
      * Detener sonido de llamada entrante
      */
@@ -1217,7 +1442,7 @@ class WebRTCSoftphone {
             }
         }
     }
-    
+
     /**
      * Escapar HTML para prevenir XSS
      */
@@ -1226,7 +1451,7 @@ class WebRTCSoftphone {
         div.textContent = text;
         return div.innerHTML;
     }
-    
+
     /**
      * Configurar sesión de audio para llamada (entrante o saliente)
      */
@@ -1237,7 +1462,7 @@ class WebRTCSoftphone {
             }
             return;
         }
-        
+
         // Esperar a que el sessionDescriptionHandler esté disponible
         const setupAudio = () => {
             if (!invitation.sessionDescriptionHandler) {
@@ -1248,10 +1473,10 @@ class WebRTCSoftphone {
                 setTimeout(setupAudio, 100);
                 return;
             }
-            
+
             const sessionDescriptionHandler = invitation.sessionDescriptionHandler;
             const pc = sessionDescriptionHandler.peerConnection;
-            
+
             if (!pc) {
                 if (this.config.debug_mode) {
                     console.warn('⚠️ [WebRTC Softphone] PeerConnection no disponible aún');
@@ -1259,27 +1484,27 @@ class WebRTCSoftphone {
                 setTimeout(setupAudio, 100);
                 return;
             }
-            
+
             if (this.config.debug_mode) {
                 console.log('🔊 [WebRTC Softphone] Configurando sesión de audio...');
                 console.log('   PeerConnection state:', pc.connectionState);
                 console.log('   ICE state:', pc.iceConnectionState);
             }
-            
+
             // Obtener elementos de audio del SessionDescriptionHandler
             const localAudio = sessionDescriptionHandler.localAudioElement;
             const remoteAudio = sessionDescriptionHandler.remoteAudioElement;
-            
+
             if (localAudio) {
                 localAudio.volume = 0; // Silenciar audio local (evitar feedback)
                 localAudio.muted = true;
-                
+
                 // Agregar al DOM si no está
                 if (!localAudio.parentNode) {
                     document.body.appendChild(localAudio);
                     localAudio.style.display = 'none';
                 }
-                
+
                 if (this.config.debug_mode) {
                     console.log('✅ [WebRTC Softphone] Audio local configurado');
                 }
@@ -1288,7 +1513,7 @@ class WebRTCSoftphone {
                     console.warn('⚠️ [WebRTC Softphone] localAudioElement no disponible');
                 }
             }
-            
+
             // CRÍTICO: Configurar audio remoto desde el PeerConnection directamente
             // El SessionDescriptionHandler puede no tener remoteAudioElement, pero el PeerConnection sí tiene los tracks
             if (pc && pc.getReceivers) {
@@ -1296,7 +1521,7 @@ class WebRTCSoftphone {
                 if (this.config.debug_mode) {
                     console.log(`🔍 [WebRTC Softphone] Receivers encontrados: ${receivers.length}`);
                 }
-                
+
                 receivers.forEach((receiver, index) => {
                     const track = receiver.track;
                     if (track && track.kind === 'audio') {
@@ -1307,12 +1532,12 @@ class WebRTCSoftphone {
                                 readyState: track.readyState
                             });
                         }
-                        
+
                         // Asegurar que el track esté habilitado
                         if (!track.enabled) {
                             track.enabled = true;
                         }
-                        
+
                         // Crear un elemento de audio para reproducir el track remoto
                         if (!this.remoteAudioElement) {
                             this.remoteAudioElement = document.createElement('audio');
@@ -1323,16 +1548,16 @@ class WebRTCSoftphone {
                             this.remoteAudioElement.muted = false;
                             this.remoteAudioElement.style.display = 'none';
                             document.body.appendChild(this.remoteAudioElement);
-                            
+
                             if (this.config.debug_mode) {
                                 console.log('✅ [WebRTC Softphone] Elemento de audio remoto creado');
                             }
                         }
-                        
+
                         // Conectar el track al elemento de audio
                         const remoteStream = new MediaStream([track]);
                         this.remoteAudioElement.srcObject = remoteStream;
-                        
+
                         // Intentar reproducir
                         this.remoteAudioElement.play()
                             .then(() => {
@@ -1346,31 +1571,31 @@ class WebRTCSoftphone {
                     }
                 });
             }
-            
+
             // También intentar usar remoteAudioElement si está disponible
             if (remoteAudio) {
                 remoteAudio.autoplay = true;
                 remoteAudio.volume = 1.0;
                 remoteAudio.muted = false;
-                
+
                 // Agregar al DOM si no está
                 if (!remoteAudio.parentNode) {
                     document.body.appendChild(remoteAudio);
                     remoteAudio.style.display = 'none';
                 }
-                
+
                 // Asegurar que el audio se reproduzca
                 remoteAudio.play().catch(error => {
                     if (this.config.debug_mode) {
                         console.warn('⚠️ [WebRTC Softphone] Error al reproducir remoteAudioElement:', error);
                     }
                 });
-                
+
                 if (this.config.debug_mode) {
                     console.log('✅ [WebRTC Softphone] remoteAudioElement configurado');
                 }
             }
-            
+
             // Escuchar cuando se agreguen tracks remotos
             if (pc && !pc._audioTrackListenerAdded) {
                 pc.addEventListener('track', (event) => {
@@ -1378,10 +1603,10 @@ class WebRTCSoftphone {
                         if (this.config.debug_mode) {
                             console.log('🎵 [WebRTC Softphone] Track remoto agregado:', event.track.id);
                         }
-                        
+
                         // Asegurar que el track esté habilitado
                         event.track.enabled = true;
-                        
+
                         // Conectar al elemento de audio
                         if (this.remoteAudioElement) {
                             const remoteStream = new MediaStream([event.track]);
@@ -1400,7 +1625,7 @@ class WebRTCSoftphone {
                 });
                 pc._audioTrackListenerAdded = true;
             }
-            
+
             if (this.config.debug_mode) {
                 console.log('🔊 [WebRTC Softphone] Sesión de audio configurada:', {
                     localAudio: !!localAudio,
@@ -1411,11 +1636,11 @@ class WebRTCSoftphone {
                 });
             }
         };
-        
+
         // Intentar configurar inmediatamente
         setupAudio();
     }
-    
+
     /**
      * Realizar una llamada (igual que APEX2)
      */
@@ -1424,60 +1649,60 @@ class WebRTCSoftphone {
             this.showError('Por favor ingrese un número');
             return;
         }
-        
+
         if (!this.isRegistered) {
             this.showError('No está conectado al servidor SIP');
             return;
         }
-        
+
         if (this.currentCall) {
             this.showError('Ya hay una llamada en curso');
             return;
         }
-        
+
         try {
             const number = this.currentNumber.trim();
-            
+
             if (!number) {
                 throw new Error('Número de destino no válido');
             }
-            
+
             if (!this.config.sip_domain || !this.config.sip_domain.trim()) {
                 throw new Error('Dominio SIP no configurado');
             }
-            
+
             if (typeof SIP === 'undefined' || typeof SIP.UserAgent === 'undefined') {
                 throw new Error('SIP.js no está cargado correctamente');
             }
-            
+
             if (typeof SIP.UserAgent.makeURI !== 'function') {
                 throw new Error('SIP.UserAgent.makeURI() no está disponible');
             }
-            
+
             // Crear URI del destino usando SIP.UserAgent.makeURI (igual que APEX2)
             const targetUriString = `sip:${number}@${this.config.sip_domain.trim()}`;
-            
+
             if (this.config.debug_mode) {
                 console.log('📞 [WebRTC Softphone] Creando URI destino:', targetUriString);
             }
-            
+
             let targetUri = SIP.UserAgent.makeURI(targetUriString);
             if (!targetUri) {
                 throw new Error('No se pudo crear la URI de destino');
             }
-            
+
             // Parchear URI para agregar método clone() si no lo tiene (igual que APEX2)
             targetUri = this._patchUriClone(targetUri);
-            
+
             if (this.config.debug_mode) {
                 console.log('✅ [WebRTC Softphone] URI destino creado y parchado:', targetUri.toString());
             }
-            
+
             // Crear Inviter (igual que APEX2)
             if (this.config.debug_mode) {
                 console.log('📞 [WebRTC Softphone] Creando Inviter...');
             }
-            
+
             const inviterOptions = {
                 requestDelegate: {
                     onAccept: () => {
@@ -1527,28 +1752,28 @@ class WebRTCSoftphone {
                     }
                 }
             };
-            
+
             const inviter = new SIP.Inviter(this.userAgent, targetUri, inviterOptions);
             if (!inviter) {
                 throw new Error('No se pudo crear el Inviter');
             }
-            
+
             if (this.config.debug_mode) {
                 console.log('✅ [WebRTC Softphone] Inviter creado exitosamente');
             }
-            
+
             this.currentCall = inviter;
             this.updateStatus('in-call', 'Llamando...');
             this.showCallInfo(number);
-            
+
             // Configurar eventos de la llamada (igual que APEX2)
             inviter.stateChange.addListener((newState) => {
                 if (this.config.debug_mode) {
                     console.log('📞 [WebRTC Softphone] Estado de llamada:', newState);
                 }
-                
+
                 const stateStr = String(newState);
-                
+
                 if (stateStr === 'Established' || stateStr === '4' || newState === 'Established') {
                     this.updateStatus('in-call', 'En llamada');
                     // Detener ringback cuando la llamada se establece
@@ -1576,12 +1801,12 @@ class WebRTCSoftphone {
                     this.playRingbackSound();
                 }
             });
-            
+
             // Enviar INVITE
             if (this.config.debug_mode) {
                 console.log('📞 [WebRTC Softphone] Enviando INVITE...');
             }
-            
+
             inviter.invite()
                 .then(() => {
                     if (this.config.debug_mode) {
@@ -1593,7 +1818,7 @@ class WebRTCSoftphone {
                     this.showError('Error al realizar la llamada: ' + (error.message || 'Desconocido'));
                     this.endCall();
                 });
-            
+
         } catch (error) {
             console.error('❌ [WebRTC Softphone] Error al realizar llamada:', error);
             this.showError('Error al realizar la llamada: ' + error.message);
@@ -1601,7 +1826,7 @@ class WebRTCSoftphone {
             this.updateStatus('connected', 'Conectado');
         }
     }
-    
+
     /**
      * Manejar cambios de estado de la llamada
      */
@@ -1609,7 +1834,7 @@ class WebRTCSoftphone {
         if (this.config.debug_mode) {
             console.log('📞 Estado de llamada:', newState);
         }
-        
+
         switch (newState) {
             case 'Established':
                 this.updateCallStatus('En llamada');
@@ -1639,58 +1864,139 @@ class WebRTCSoftphone {
                 break;
         }
     }
-    
-    
+
+
     /**
-     * Colgar la llamada (igual que APEX2)
+     * Colgar la llamada (optimizado para respuesta inmediata)
      */
     hangup() {
-        if (this.currentCall) {
+        // Prevenir múltiples ejecuciones simultáneas
+        if (this.isHangingUp) {
+            if (this.config.debug_mode) {
+                console.warn('⚠️ [WebRTC Softphone] Ya se está procesando una acción de colgar');
+            }
+            return;
+        }
+
+        // Marcar que estamos colgando
+        this.isHangingUp = true;
+
+        // Feedback visual inmediato
+        const hangupButton = document.getElementById('btn-hangup');
+        if (hangupButton) {
+            hangupButton.style.opacity = '0.6';
+            hangupButton.style.cursor = 'wait';
+            hangupButton.disabled = true;
+        }
+        this.updateCallStatus('Colgando...');
+
+        try {
+            if (this.config.debug_mode) {
+                console.log('📴 [WebRTC Softphone] Usuario presionó Colgar');
+            }
+
+            // Guardar referencia local
+            const call = this.currentCall;
+
+            // Si no hay llamada activa, solo limpiar UI
+            if (!call) {
+                if (this.config.debug_mode) {
+                    console.log('ℹ️ [WebRTC Softphone] No hay llamada activa para colgar');
+                }
+                this.endCall();
+                this.isHangingUp = false;
+                this._restoreHangupButton(hangupButton);
+                return;
+            }
+
+            // Intentar colgar inmediatamente sin esperar verificaciones complejas
             try {
-                if (this.config.debug_mode) {
-                    console.log('📴 [WebRTC Softphone] Colgando llamada...');
+                // Verificar estado rápidamente
+                let state;
+                try {
+                    state = String(call.state);
+                } catch (e) {
+                    state = 'Unknown';
                 }
-                
-                // Verificar el estado de la sesión para usar el método correcto
-                const state = String(this.currentCall.state);
+
                 if (this.config.debug_mode) {
-                    console.log('   📞 Estado de la sesión:', state);
+                    console.log('📞 [WebRTC Softphone] Estado de la sesión:', state);
                 }
-                
-                // Si la llamada aún no está establecida (Establishing, Progress), usar cancel()
-                // Si la llamada está establecida (Established), usar bye()
-                if (state === 'Establishing' || state === '3' || 
+
+                // Intentar cancel() si está en progreso, sino bye()
+                const isInProgress = state === 'Establishing' || state === '3' ||
                     state === 'Progress' || state === '2' ||
-                    this.currentCall.state === 'Establishing' || 
-                    this.currentCall.state === 'Progress') {
+                    state === 'InviteSent' || state === '1';
+
+                if (isInProgress) {
                     if (this.config.debug_mode) {
-                        console.log('   📞 Cancelando llamada en progreso...');
+                        console.log('📞 [WebRTC Softphone] Cancelando llamada en progreso...');
                     }
-                    if (typeof this.currentCall.cancel === 'function') {
-                        this.currentCall.cancel();
-                    } else {
-                        // Fallback: intentar con bye() si cancel() no está disponible
-                        if (this.config.debug_mode) {
-                            console.log('   ⚠️ cancel() no disponible, usando bye()');
-                        }
-                        this.currentCall.bye();
+                    // Intentar cancel primero
+                    if (typeof call.cancel === 'function') {
+                        call.cancel();
+                    } else if (typeof call.bye === 'function') {
+                        call.bye();
                     }
                 } else {
-                    // Llamada establecida, usar bye()
+                    // Llamada establecida o cualquier otro estado, usar bye()
                     if (this.config.debug_mode) {
-                        console.log('   📞 Terminando llamada establecida...');
+                        console.log('📞 [WebRTC Softphone] Finalizando llamada...');
                     }
-                    this.currentCall.bye();
+                    if (typeof call.bye === 'function') {
+                        call.bye();
+                    } else if (typeof call.cancel === 'function') {
+                        call.cancel();
+                    }
                 }
-                
-                this.endCall();
-            } catch (error) {
-                console.error('❌ [WebRTC Softphone] Error al colgar:', error);
-                this.endCall();
+            } catch (callError) {
+                // Si falla el método específico, intentar el otro
+                if (this.config.debug_mode) {
+                    console.warn('⚠️ [WebRTC Softphone] Error al usar método específico, intentando alternativo:', callError);
+                }
+                try {
+                    if (typeof call.bye === 'function') {
+                        call.bye();
+                    } else if (typeof call.cancel === 'function') {
+                        call.cancel();
+                    }
+                } catch (altError) {
+                    if (this.config.debug_mode) {
+                        console.warn('⚠️ [WebRTC Softphone] Error con método alternativo:', altError);
+                    }
+                    // Continuar de todas formas para limpiar UI
+                }
             }
+
+            // Siempre limpiar UI, incluso si hubo errores
+            this.endCall();
+
+            if (this.config.debug_mode) {
+                console.log('✅ [WebRTC Softphone] Llamada colgada exitosamente');
+            }
+
+        } catch (error) {
+            console.error('❌ [WebRTC Softphone] Error al colgar:', error);
+            // Asegurar que siempre se limpie la UI
+            this.endCall();
+        } finally {
+            // Resetear bandera y restaurar botón
+            this.isHangingUp = false;
+            this._restoreHangupButton(hangupButton);
         }
     }
-    
+
+    /**
+     * Restaurar estado del botón de colgar
+     */
+    _restoreHangupButton(button) {
+        if (button) {
+            button.style.opacity = '1';
+            button.style.cursor = 'pointer';
+            button.disabled = false;
+        }
+    }
+
     /**
      * Finalizar llamada
      */
@@ -1698,14 +2004,14 @@ class WebRTCSoftphone {
         if (this.config.debug_mode) {
             console.log('📴 [WebRTC Softphone] Finalizando llamada...');
         }
-        
+
         // Detener todos los sonidos
         this.stopIncomingCallSound();
         this.stopRingbackSound();
-        
+
         // Ocultar notificación de llamada entrante si existe
         this.hideIncomingCallNotification();
-        
+
         // Limpiar audio remoto
         if (this.remoteAudioElement) {
             try {
@@ -1718,30 +2024,40 @@ class WebRTCSoftphone {
                 console.warn('⚠️ [WebRTC Softphone] Error al limpiar audio remoto:', error);
             }
         }
-        
+
         // Limpiar MediaStream
         this._releaseLastMediaStream();
-        
+
         // Limpiar variables
         this.currentCall = null;
         this.incomingCallInvitation = null;
         this.currentNumber = '';
-        
+
         // Limpiar conferencia
         this.conferenceCalls = [];
         this.isInConference = false;
-        
+
+        // Resetear banderas
+        this.isAcceptingCall = false;
+        this.isHangingUp = false;
+
         // Restaurar UI
         this.updateStatus('connected', 'En línea');
         this.hideCallInfo();
         this.stopCallTimer();
         this.updateNumberDisplay();
-        
+
+        // Restaurar botones
+        const hangupButton = document.getElementById('btn-hangup');
+        const acceptButton = document.getElementById('btn-accept-call');
+        this._restoreHangupButton(hangupButton);
+        this._restoreAcceptButton(acceptButton);
+
         if (this.config.debug_mode) {
             console.log('✅ [WebRTC Softphone] Llamada finalizada y UI restaurada');
         }
     }
-    
+
     /**
      * Agregar dígito al número
      */
@@ -1749,7 +2065,7 @@ class WebRTCSoftphone {
         this.currentNumber += digit;
         this.updateNumberDisplay();
     }
-    
+
     /**
      * Eliminar último dígito
      */
@@ -1759,7 +2075,7 @@ class WebRTCSoftphone {
             this.updateNumberDisplay();
         }
     }
-    
+
     /**
      * Establecer número (para click-to-call)
      */
@@ -1767,7 +2083,7 @@ class WebRTCSoftphone {
         this.currentNumber = number.toString().replace(/\D/g, ''); // Solo números
         this.updateNumberDisplay();
     }
-    
+
     /**
      * Llamar a un número (método público para click-to-call)
      */
@@ -1777,7 +2093,7 @@ class WebRTCSoftphone {
             this.makeCall();
         }, 100);
     }
-    
+
     /**
      * Actualizar display del número
      */
@@ -1787,7 +2103,7 @@ class WebRTCSoftphone {
             display.textContent = this.currentNumber || 'Ingrese número';
         }
     }
-    
+
     /**
      * Actualizar estado de conexión
      */
@@ -1795,16 +2111,16 @@ class WebRTCSoftphone {
         this.status = status;
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
-        
+
         if (statusDot) {
             statusDot.className = 'status-dot ' + status;
         }
-        
+
         if (statusText) {
             statusText.textContent = text || this.getStatusText(status);
         }
     }
-    
+
     /**
      * Obtener texto del estado
      */
@@ -1817,7 +2133,7 @@ class WebRTCSoftphone {
         };
         return statusTexts[status] || 'Desconectado';
     }
-    
+
     /**
      * Mostrar información de llamada
      */
@@ -1827,28 +2143,28 @@ class WebRTCSoftphone {
         const callControls = document.getElementById('call-controls');
         const btnCall = document.getElementById('btn-call');
         const btnHangup = document.getElementById('btn-hangup');
-        
+
         if (callInfo) {
             callInfo.style.display = 'block';
         }
-        
+
         if (callInfoNumber) {
             callInfoNumber.textContent = number;
         }
-        
+
         if (callControls) {
             callControls.style.display = 'grid';
         }
-        
+
         if (btnCall) {
             btnCall.style.display = 'none';
         }
-        
+
         if (btnHangup) {
             btnHangup.style.display = 'inline-block';
         }
     }
-    
+
     /**
      * Ocultar información de llamada
      */
@@ -1858,30 +2174,30 @@ class WebRTCSoftphone {
         const btnCall = document.getElementById('btn-call');
         const btnHangup = document.getElementById('btn-hangup');
         const numberDisplay = document.getElementById('number-display');
-        
+
         if (callInfo) {
             callInfo.style.display = 'none';
             callInfo.classList.remove('active');
         }
-        
+
         if (callControls) {
             callControls.style.display = 'none';
         }
-        
+
         if (btnCall) {
             btnCall.style.display = 'inline-block';
         }
-        
+
         if (btnHangup) {
             btnHangup.style.display = 'none';
         }
-        
+
         // Restaurar el display del número
         if (numberDisplay) {
             numberDisplay.style.display = 'block';
         }
     }
-    
+
     /**
      * Actualizar estado de la llamada
      */
@@ -1891,7 +2207,7 @@ class WebRTCSoftphone {
             callInfoStatus.textContent = status;
         }
     }
-    
+
     /**
      * Iniciar temporizador de llamada
      */
@@ -1902,14 +2218,14 @@ class WebRTCSoftphone {
             const minutes = Math.floor(duration / 60);
             const seconds = duration % 60;
             const durationText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            
+
             const callInfoDuration = document.getElementById('call-info-duration');
             if (callInfoDuration) {
                 callInfoDuration.textContent = durationText;
             }
         }, 1000);
     }
-    
+
     /**
      * Detener temporizador de llamada
      */
@@ -1919,7 +2235,7 @@ class WebRTCSoftphone {
             this.callTimerInterval = null;
         }
     }
-    
+
     /**
      * Activar/Desactivar mute
      */
@@ -1931,7 +2247,7 @@ class WebRTCSoftphone {
                 audioTracks.forEach(track => {
                     track.enabled = !track.enabled;
                 });
-                
+
                 const btnMute = document.getElementById('btn-mute');
                 if (btnMute) {
                     btnMute.classList.toggle('active', !audioTracks[0]?.enabled);
@@ -1939,7 +2255,7 @@ class WebRTCSoftphone {
             }
         }
     }
-    
+
     /**
      * Activar/Desactivar speaker
      */
@@ -1951,7 +2267,7 @@ class WebRTCSoftphone {
             btnSpeaker.classList.toggle('active');
         }
     }
-    
+
     /**
      * Mostrar/ocultar softphone
      */
@@ -1961,7 +2277,7 @@ class WebRTCSoftphone {
             container.classList.toggle('hidden');
         }
     }
-    
+
     /**
      * Mostrar error
      */
@@ -1972,7 +2288,7 @@ class WebRTCSoftphone {
             alert(message);
         }
     }
-    
+
     /**
      * Mostrar notificación
      */
@@ -1980,7 +2296,38 @@ class WebRTCSoftphone {
         console.log(`ℹ️ Softphone: ${message}`);
         // Puedes implementar un sistema de notificaciones aquí
     }
-    
+
+    /**
+     * Pre-adquirir mediaStream para llamada entrante (optimización)
+     */
+    async _preAcquireMediaStreamForIncomingCall() {
+        // Solo pre-adquirir si no hay un stream activo
+        if (this.lastMediaStream && this.lastMediaStream.active) {
+            if (this.config.debug_mode) {
+                console.log('✅ [WebRTC Softphone] Ya hay un stream activo, reutilizando');
+            }
+            return this.lastMediaStream;
+        }
+
+        try {
+            if (this.config.debug_mode) {
+                console.log('🎤 [WebRTC Softphone] Pre-adquiriendo mediaStream para llamada entrante...');
+            }
+
+            const stream = await this._mediaStreamFactory();
+            if (this.config.debug_mode) {
+                console.log('✅ [WebRTC Softphone] MediaStream pre-adquirido exitosamente');
+            }
+            return stream;
+        } catch (error) {
+            // No es crítico si falla, se intentará al aceptar
+            if (this.config.debug_mode) {
+                console.log('ℹ️ [WebRTC Softphone] No se pudo pre-adquirir stream:', error.message);
+            }
+            throw error;
+        }
+    }
+
     /**
      * Factory personalizada para crear MediaStreams con las constraints correctas (igual que APEX2)
      */
@@ -1988,26 +2335,37 @@ class WebRTCSoftphone {
         if (this.config.debug_mode) {
             console.log('🎤 [WebRTC Softphone] mediaStreamFactory LLAMADA POR SIP.js');
         }
-        
+
         const finalConstraints = { audio: true, video: false };
-        
+
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             throw new Error('getUserMedia no disponible en este navegador/contexto.');
         }
-        
+
         try {
+            // Si ya hay un stream activo y válido, reutilizarlo
+            if (this.lastMediaStream && this.lastMediaStream.active) {
+                const audioTracks = this.lastMediaStream.getAudioTracks();
+                if (audioTracks.length > 0 && audioTracks[0].readyState === 'live') {
+                    if (this.config.debug_mode) {
+                        console.log('✅ [WebRTC Softphone] Reutilizando stream existente');
+                    }
+                    return this.lastMediaStream;
+                }
+            }
+
             // Liberar stream anterior si existe
             this._releaseLastMediaStream();
-            
+
             // Intentar adquirir el stream
             const stream = await navigator.mediaDevices.getUserMedia(finalConstraints);
             this.lastMediaStream = stream;
-            
+
             if (this.config.debug_mode) {
                 const audioTracks = stream.getAudioTracks();
                 console.log(`✅ [WebRTC Softphone] MediaStream adquirido. Tracks: ${audioTracks.length}`);
             }
-            
+
             return stream;
         } catch (error) {
             if (this.config.debug_mode) {
@@ -2016,7 +2374,7 @@ class WebRTCSoftphone {
             throw error;
         }
     }
-    
+
     /**
      * Libera el último MediaStream adquirido
      */
@@ -2028,7 +2386,7 @@ class WebRTCSoftphone {
             this.lastMediaStream = null;
         }
     }
-    
+
     /**
      * Parchea una instancia de URI para garantizar que cuente con el método clone()
      * incluso cuando la versión de SIP.js no lo agrega automáticamente (igual que APEX2)
@@ -2076,7 +2434,7 @@ class WebRTCSoftphone {
         }
         return uri;
     }
-    
+
     /**
      * Parchea una instancia de URI para garantizar que cuente con el método clone()
      * incluso cuando la versión de SIP.js no lo agrega automáticamente (igual que APEX2)
@@ -2124,13 +2482,13 @@ class WebRTCSoftphone {
         }
         return uri;
     }
-    
+
     /**
      * Construye la configuración de servidores ICE (STUN/TURN) - igual que APEX2
      */
     _getIceServers() {
         const iceServers = [];
-        
+
         // PRIORIDAD 1: Si hay configuración personalizada de iceServers, usarla
         if (this.config && this.config.iceServers && Array.isArray(this.config.iceServers)) {
             if (this.config.debug_mode) {
@@ -2142,15 +2500,15 @@ class WebRTCSoftphone {
                 }
             });
         }
-        
+
         // PRIORIDAD 2: Si hay configuración de STUN desde PHP (stun_server)
         if (this.config && this.config.stun_server) {
-            const stunUrl = this.config.stun_server.startsWith('stun:') 
-                ? this.config.stun_server 
+            const stunUrl = this.config.stun_server.startsWith('stun:')
+                ? this.config.stun_server
                 : `stun:${this.config.stun_server}`;
             iceServers.push({ urls: stunUrl });
         }
-        
+
         // PRIORIDAD 3: Servidores STUN públicos de Google (fallback por defecto)
         if (iceServers.length === 0) {
             iceServers.push(
@@ -2158,10 +2516,10 @@ class WebRTCSoftphone {
                 { urls: 'stun:stun1.l.google.com:19302' }
             );
         }
-        
+
         return iceServers;
     }
-    
+
     /**
      * Mostrar diálogo de conferencia
      */
@@ -2170,14 +2528,14 @@ class WebRTCSoftphone {
             this.showError('No hay llamada activa');
             return;
         }
-        
+
         const modal = document.getElementById('conference-modal');
         const input = document.getElementById('conference-extension');
         if (modal && input) {
             modal.style.display = 'flex';
             input.value = '';
             input.focus();
-            
+
             // Permitir Enter para confirmar
             input.onkeypress = (e) => {
                 if (e.key === 'Enter') {
@@ -2186,7 +2544,7 @@ class WebRTCSoftphone {
             };
         }
     }
-    
+
     /**
      * Ocultar diálogo de conferencia
      */
@@ -2196,7 +2554,7 @@ class WebRTCSoftphone {
             modal.style.display = 'none';
         }
     }
-    
+
     /**
      * Iniciar conferencia agregando una tercera persona
      */
@@ -2205,23 +2563,23 @@ class WebRTCSoftphone {
         if (!input) {
             return;
         }
-        
+
         const extension = input.value.trim();
         if (!extension) {
             this.showError('Por favor ingrese una extensión');
             return;
         }
-        
+
         if (!this.currentCall) {
             this.showError('No hay llamada activa');
             this.hideConferenceDialog();
             return;
         }
-        
+
         if (this.config.debug_mode) {
             console.log('📞 [WebRTC Softphone] Iniciando conferencia con extensión:', extension);
         }
-        
+
         try {
             // Crear URI de destino
             const targetUriString = `sip:${extension}@${this.config.sip_domain}`;
@@ -2229,10 +2587,10 @@ class WebRTCSoftphone {
             if (!targetUri) {
                 throw new Error('No se pudo crear URI de destino');
             }
-            
+
             // Parchear URI
             targetUri = this._patchUriClone(targetUri);
-            
+
             // Crear nueva llamada para la conferencia
             const inviterOptions = {
                 requestDelegate: {
@@ -2264,22 +2622,22 @@ class WebRTCSoftphone {
                     mediaStreamFactory: this.mediaStreamFactory
                 }
             };
-            
+
             const conferenceInviter = new SIP.Inviter(this.userAgent, targetUri, inviterOptions);
-            
+
             // Configurar eventos de la llamada de conferencia
             conferenceInviter.stateChange.addListener((newState) => {
                 const stateStr = String(newState);
                 if (this.config.debug_mode) {
                     console.log('📞 [WebRTC Softphone] Estado de conferencia:', stateStr);
                 }
-                
+
                 if (stateStr === 'Established') {
                     this.conferenceCalls.push(conferenceInviter);
                     this.isInConference = true;
                     this.hideConferenceDialog();
                     this.showNotification(`Conferencia iniciada con ${extension}`, 'success');
-                    
+
                     // Configurar audio para la nueva llamada
                     setTimeout(() => {
                         this.setupAudioSessionForCall(conferenceInviter);
@@ -2292,20 +2650,20 @@ class WebRTCSoftphone {
                     }
                 }
             });
-            
+
             // Enviar INVITE
             await conferenceInviter.invite();
-            
+
             if (this.config.debug_mode) {
                 console.log('📞 [WebRTC Softphone] INVITE de conferencia enviado a:', extension);
             }
-            
+
         } catch (error) {
             console.error('❌ [WebRTC Softphone] Error al iniciar conferencia:', error);
             this.showError('Error al iniciar conferencia: ' + error.message);
         }
     }
-    
+
     /**
      * Mostrar diálogo de transferencia
      */
@@ -2314,14 +2672,14 @@ class WebRTCSoftphone {
             this.showError('No hay llamada activa');
             return;
         }
-        
+
         const modal = document.getElementById('transfer-modal');
         const input = document.getElementById('transfer-extension');
         if (modal && input) {
             modal.style.display = 'flex';
             input.value = '';
             input.focus();
-            
+
             // Permitir Enter para confirmar
             input.onkeypress = (e) => {
                 if (e.key === 'Enter') {
@@ -2330,7 +2688,7 @@ class WebRTCSoftphone {
             };
         }
     }
-    
+
     /**
      * Ocultar diálogo de transferencia
      */
@@ -2340,7 +2698,7 @@ class WebRTCSoftphone {
             modal.style.display = 'none';
         }
     }
-    
+
     /**
      * Transferir llamada a otra extensión
      */
@@ -2349,47 +2707,47 @@ class WebRTCSoftphone {
         if (!input) {
             return;
         }
-        
+
         const extension = input.value.trim();
         if (!extension) {
             this.showError('Por favor ingrese una extensión');
             return;
         }
-        
+
         if (!this.currentCall) {
             this.showError('No hay llamada activa');
             this.hideTransferDialog();
             return;
         }
-        
+
         if (this.config.debug_mode) {
             console.log('📞 [WebRTC Softphone] Transferiendo llamada a extensión:', extension);
         }
-        
+
         try {
             // Verificar que la sesión tenga el método refer()
             if (!this.currentCall || typeof this.currentCall.refer !== 'function') {
                 throw new Error('La sesión actual no soporta transferencias');
             }
-            
+
             // Crear URI de destino para transferencia
             const targetUriString = `sip:${extension}@${this.config.sip_domain}`;
             let targetUri = SIP.UserAgent.makeURI(targetUriString);
             if (!targetUri) {
                 throw new Error('No se pudo crear URI de destino');
             }
-            
+
             // Parchear URI
             targetUri = this._patchUriClone(targetUri);
-            
+
             if (this.config.debug_mode) {
                 console.log('📞 [WebRTC Softphone] Iniciando transferencia a:', targetUriString);
             }
-            
+
             // Realizar la transferencia usando el método refer() directamente de la sesión
             // SIP.js usa refer() para transferencias ciegas (blind transfer)
             const referResult = this.currentCall.refer(targetUri);
-            
+
             // Si refer() retorna una promesa, manejarla
             if (referResult && typeof referResult.then === 'function') {
                 referResult
@@ -2399,7 +2757,7 @@ class WebRTCSoftphone {
                         }
                         this.hideTransferDialog();
                         this.showNotification(`Llamada transferida a ${extension}`, 'success');
-                        
+
                         // La llamada se terminará automáticamente después de la transferencia
                         setTimeout(() => {
                             if (this.config.debug_mode) {
@@ -2420,35 +2778,35 @@ class WebRTCSoftphone {
                 }
                 this.hideTransferDialog();
                 this.showNotification(`Transferencia iniciada a ${extension}`, 'success');
-                
+
                 // Esperar un momento y luego limpiar
                 setTimeout(() => {
                     this.endCall();
                 }, 1500);
             }
-            
+
         } catch (error) {
             console.error('❌ [WebRTC Softphone] Error al transferir llamada:', error);
             this.showError('Error al transferir llamada: ' + error.message);
             this.hideTransferDialog();
         }
     }
-    
+
     /**
      * Desconectar y limpiar recursos
      */
     disconnect() {
         // Detener sonido de llamada
         this.stopIncomingCallSound();
-        
+
         // Ocultar notificación de llamada entrante
         this.hideIncomingCallNotification();
-        
+
         // Colgar llamada activa
         if (this.currentCall) {
             this.hangup();
         }
-        
+
         // Rechazar llamada entrante si existe
         if (this.incomingCallInvitation) {
             try {
@@ -2457,7 +2815,7 @@ class WebRTCSoftphone {
                 console.warn('⚠️ Error al rechazar llamada entrante:', error);
             }
         }
-        
+
         // Desregistrar antes de detener
         if (this.registerer) {
             try {
@@ -2470,13 +2828,13 @@ class WebRTCSoftphone {
             }
             this.registerer = null;
         }
-        
+
         // Detener UserAgent
         if (this.userAgent) {
             this.userAgent.stop();
             this.userAgent = null;
         }
-        
+
         // Limpiar variables
         this.isConnected = false;
         this.isRegistered = false;
@@ -2490,4 +2848,5 @@ class WebRTCSoftphone {
 if (typeof window !== 'undefined') {
     window.WebRTCSoftphone = WebRTCSoftphone;
 }
+
 
