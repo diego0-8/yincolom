@@ -11,6 +11,7 @@
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,8 +21,9 @@
     <link rel="stylesheet" href="assets/css/asesor-gestionar-cliente.css">
     <link rel="stylesheet" href="assets/css/softphone-web.css">
 </head>
+
 <body>
-    <?php 
+    <?php
     require_once 'shared_navbar.php';
     $navbar = getNavbar('Gestionar Cliente', $_SESSION['user_role'] ?? '');
     // Agregar icono de búsqueda al navbar del asesor
@@ -47,7 +49,7 @@
                 <!-- Panel de Información del Cliente -->
                 <div class="panel-cliente">
                     <h2 id="clienteNombre"><?php echo htmlspecialchars($cliente['nombre'] ?? 'Cliente'); ?></h2>
-                    
+
                     <div class="cliente-info-item">
                         <i class="fas fa-id-card"></i>
                         <strong>Cédula</strong>
@@ -55,31 +57,31 @@
                     </div>
 
                     <?php if (!empty($cliente['email'])): ?>
-                    <div class="cliente-info-item">
-                        <i class="fas fa-envelope"></i>
-                        <strong>Correo</strong>
-                        <span><?php echo htmlspecialchars($cliente['email']); ?></span>
-                    </div>
+                        <div class="cliente-info-item">
+                            <i class="fas fa-envelope"></i>
+                            <strong>Correo</strong>
+                            <span><?php echo htmlspecialchars($cliente['email']); ?></span>
+                        </div>
                     <?php endif; ?>
 
                     <!-- Selector de Teléfono -->
                     <div class="telefono-selector">
                         <select id="telefonoSelect">
                             <?php if (!empty($cliente['telefono'])): ?>
-                            <option value="<?php echo htmlspecialchars($cliente['telefono']); ?>" data-tipo="Teléfono">
-                                <?php echo htmlspecialchars($cliente['telefono']); ?> (Teléfono)
-                            </option>
+                                <option value="<?php echo htmlspecialchars($cliente['telefono']); ?>" data-tipo="Teléfono">
+                                    <?php echo htmlspecialchars($cliente['telefono']); ?> (Teléfono)
+                                </option>
                             <?php endif; ?>
                             <?php if (!empty($cliente['celular2'])): ?>
-                            <option value="<?php echo htmlspecialchars($cliente['celular2']); ?>" data-tipo="Celular">
-                                <?php echo htmlspecialchars($cliente['celular2']); ?> (Celular)
-                            </option>
+                                <option value="<?php echo htmlspecialchars($cliente['celular2']); ?>" data-tipo="Celular">
+                                    <?php echo htmlspecialchars($cliente['celular2']); ?> (Celular)
+                                </option>
                             <?php endif; ?>
                         </select>
                         <div class="telefono-display">
-                            <input type="text" id="telefonoSeleccionadoDisplay" 
-                                   value="<?php echo htmlspecialchars($cliente['telefono'] ?? $cliente['celular2'] ?? ''); ?>" 
-                                   readonly>
+                            <input type="text" id="telefonoSeleccionadoDisplay"
+                                value="<?php echo htmlspecialchars($cliente['telefono'] ?? $cliente['celular2'] ?? ''); ?>"
+                                readonly>
                             <button type="button" onclick="iniciarLlamadaDesdeTelefonoSeleccionado()">
                                 <i class="fas fa-phone"></i> Llamar
                             </button>
@@ -93,19 +95,21 @@
                     <div id="obligacionesListaPanel">
                         <?php if (!empty($obligaciones)): ?>
                             <?php foreach ($obligaciones as $obligacion): ?>
-                            <div class="obligacion-item">
-                                <h6>
-                                    <i class="fas fa-file-invoice"></i> 
-                                    Obligación #<?php echo htmlspecialchars($obligacion['obligacion'] ?? 'N/A'); ?>
-                                </h6>
-                                <div style="font-size: 11px; color: #6b7280;">
-                                    <strong>Producto:</strong> <?php echo htmlspecialchars($obligacion['producto'] ?? 'N/A'); ?> | 
-                                    <strong>Propiedad:</strong> <?php echo htmlspecialchars($obligacion['propiedad'] ?? 'N/A'); ?>
+                                <div class="obligacion-item">
+                                    <h6>
+                                        <i class="fas fa-file-invoice"></i>
+                                        Obligación #<?php echo htmlspecialchars($obligacion['obligacion'] ?? 'N/A'); ?>
+                                    </h6>
+                                    <div style="font-size: 11px; color: #6b7280;">
+                                        <strong>Producto:</strong>
+                                        <?php echo htmlspecialchars($obligacion['producto'] ?? 'N/A'); ?> |
+                                        <strong>Propiedad:</strong>
+                                        <?php echo htmlspecialchars($obligacion['propiedad'] ?? 'N/A'); ?>
+                                    </div>
+                                    <div style="text-align: right; margin-top: 5px; color: #10b981; font-weight: 600;">
+                                        $<?php echo number_format($obligacion['saldo_k_obligacion'] ?? 0, 0, ',', '.'); ?>
+                                    </div>
                                 </div>
-                                <div style="text-align: right; margin-top: 5px; color: #10b981; font-weight: 600;">
-                                    $<?php echo number_format($obligacion['saldo_k_obligacion'] ?? 0, 0, ',', '.'); ?>
-                                </div>
-                            </div>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <div style="text-align: center; padding: 14px; color: #7f8c8d;">
@@ -123,7 +127,8 @@
                     <h2><i class="fas fa-clipboard-list"></i> Registrar Gestión</h2>
 
                     <form id="tipificacionForm" method="POST" action="javascript:void(0);" onsubmit="return false;">
-                        <input type="hidden" name="cliente_id" id="inputClienteId" value="<?php echo htmlspecialchars($cliente['id'] ?? ''); ?>">
+                        <input type="hidden" name="cliente_id" id="inputClienteId"
+                            value="<?php echo htmlspecialchars($cliente['id'] ?? ''); ?>">
                         <input type="hidden" name="tipificacion" id="tipificacion_principal">
                         <input type="hidden" name="sub_tipificacion" id="sub_tipificacion_hidden">
                         <input type="hidden" name="duracion_llamada" id="duracion_llamada_hidden" value="0">
@@ -143,19 +148,21 @@
                         <!-- Obligación Seleccionada (PRIMERO) -->
                         <div class="form-group">
                             <label for="obligacion_seleccionada">
-                                Obligación <span id="obligacion_required_indicator" class="required-indicator" style="display: none;">*</span>
+                                Obligación <span id="obligacion_required_indicator" class="required-indicator"
+                                    style="display: none;">*</span>
                             </label>
-                            <select name="obligacion_id" id="obligacion_seleccionada" onchange="manejarSeleccionObligacion()">
+                            <select name="obligacion_id" id="obligacion_seleccionada"
+                                onchange="manejarSeleccionObligacion()">
                                 <option value="ninguna">Ninguna</option>
                                 <?php if (!empty($obligaciones)): ?>
                                     <?php foreach ($obligaciones as $obligacion): ?>
-                                    <option value="<?php echo htmlspecialchars($obligacion['id'] ?? ''); ?>" 
+                                        <option value="<?php echo htmlspecialchars($obligacion['id'] ?? ''); ?>"
                                             data-producto="<?php echo htmlspecialchars($obligacion['producto'] ?? ''); ?>"
                                             data-monto="<?php echo htmlspecialchars($obligacion['saldo_k_obligacion'] ?? 0); ?>"
                                             data-obligacion="<?php echo htmlspecialchars($obligacion['obligacion'] ?? ''); ?>">
-                                        <?php echo htmlspecialchars($obligacion['producto'] ?? 'Producto'); ?> - 
-                                        $<?php echo number_format($obligacion['saldo_k_obligacion'] ?? 0, 0, ',', '.'); ?>
-                                    </option>
+                                            <?php echo htmlspecialchars($obligacion['producto'] ?? 'Producto'); ?> -
+                                            $<?php echo number_format($obligacion['saldo_k_obligacion'] ?? 0, 0, ',', '.'); ?>
+                                        </option>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                             </select>
@@ -170,7 +177,8 @@
                             <label for="tipo_gestion">
                                 Tipo de Gestión <span class="required-indicator">*</span>
                             </label>
-                            <select name="tipo_gestion" id="tipo_gestion" onchange="mostrarTipificacionesEspecificas(this.value)" required>
+                            <select name="tipo_gestion" id="tipo_gestion"
+                                onchange="mostrarTipificacionesEspecificas(this.value)" required>
                                 <option value="">Seleccione...</option>
                                 <option value="hacer_llamada">Hacer Llamada</option>
                                 <option value="recibir_llamada">Recibir Llamada</option>
@@ -182,7 +190,8 @@
                             <label for="subcategoria_hacer">
                                 Subcategoría <span class="required-indicator">*</span>
                             </label>
-                            <select name="subcategoria_hacer" id="subcategoria_hacer" onchange="mostrarOpcionesEspecificasHacer(this.value)">
+                            <select name="subcategoria_hacer" id="subcategoria_hacer"
+                                onchange="mostrarOpcionesEspecificasHacer(this.value)">
                                 <option value="">Seleccione...</option>
                                 <option value="1.1">CON INTENCIÓN DE PAGO</option>
                                 <option value="1.2">SIN INTENCIÓN DE PAGO</option>
@@ -197,7 +206,8 @@
                             <label for="opcion_especifica_hacer">
                                 Opción Específica <span class="required-indicator">*</span>
                             </label>
-                            <select name="opcion_especifica_hacer" id="opcion_especifica_hacer" onchange="seleccionarOpcionEspecificaHacer(this.value)">
+                            <select name="opcion_especifica_hacer" id="opcion_especifica_hacer"
+                                onchange="seleccionarOpcionEspecificaHacer(this.value)">
                                 <option value="">Seleccione...</option>
                             </select>
                         </div>
@@ -207,7 +217,8 @@
                             <label for="subcategoria_recibir">
                                 Subcategoría <span class="required-indicator">*</span>
                             </label>
-                            <select name="subcategoria_recibir" id="subcategoria_recibir" onchange="mostrarOpcionesEspecificasRecibir(this.value)">
+                            <select name="subcategoria_recibir" id="subcategoria_recibir"
+                                onchange="mostrarOpcionesEspecificasRecibir(this.value)">
                                 <option value="">Seleccione...</option>
                                 <option value="1.1">CON INTENCIÓN DE PAGO</option>
                                 <option value="1.2">SIN INTENCIÓN DE PAGO</option>
@@ -222,7 +233,8 @@
                             <label for="opcion_especifica_recibir">
                                 Opción Específica <span class="required-indicator">*</span>
                             </label>
-                            <select name="opcion_especifica_recibir" id="opcion_especifica_recibir" onchange="seleccionarOpcionEspecificaRecibir(this.value)">
+                            <select name="opcion_especifica_recibir" id="opcion_especifica_recibir"
+                                onchange="seleccionarOpcionEspecificaRecibir(this.value)">
                                 <option value="">Seleccione...</option>
                             </select>
                         </div>
@@ -230,10 +242,11 @@
                         <!-- Campos de Acuerdo de Pago (se muestran dinámicamente) -->
                         <div class="campos-especificos" id="campos_acuerdo_pago">
                             <h4 style="margin: 0 0 15px 0; font-size: 16px;">Acuerdo de Pago</h4>
-                            
+
                             <div class="form-group">
                                 <label for="valor_acuerdo">Valor del Acuerdo</label>
-                                <input type="text" id="valor_acuerdo" oninput="formatearPesos(this, 'valor_acuerdo_hidden')" placeholder="0">
+                                <input type="text" id="valor_acuerdo"
+                                    oninput="formatearPesos(this, 'valor_acuerdo_hidden')" placeholder="0">
                                 <input type="hidden" name="valor_acuerdo" id="valor_acuerdo_hidden">
                             </div>
 
@@ -249,7 +262,8 @@
 
                             <div class="form-group">
                                 <label for="valor_cuota">Valor de la Cuota</label>
-                                <input type="text" id="valor_cuota" oninput="formatearPesos(this, 'valor_cuota_hidden')" placeholder="0">
+                                <input type="text" id="valor_cuota" oninput="formatearPesos(this, 'valor_cuota_hidden')"
+                                    placeholder="0">
                                 <input type="hidden" name="valor_cuota" id="valor_cuota_hidden">
                             </div>
 
@@ -264,7 +278,8 @@
                             <label for="comentarios">
                                 Comentarios / Observaciones <span class="required-indicator">*</span>
                             </label>
-                            <textarea name="comentarios" id="comentarios" required placeholder="Ingrese los comentarios de la gestión..."></textarea>
+                            <textarea name="comentarios" id="comentarios" required
+                                placeholder="Ingrese los comentarios de la gestión..."></textarea>
                         </div>
 
                         <!-- Botones de Acción -->
@@ -317,70 +332,74 @@
                             </thead>
                             <tbody>
                                 <?php foreach ($historial as $gestion): ?>
-                                <tr>
-                                    <td>
-                                        <i class="fas fa-calendar-alt"></i>
-                                        <?php 
-                                        $fecha = $gestion['fecha_gestion'] ?? '';
-                                        if ($fecha) {
-                                            $fechaObj = new DateTime($fecha);
-                                            echo htmlspecialchars($fechaObj->format('d/m/Y H:i'));
-                                        } else {
-                                            echo 'N/A';
-                                        }
-                                        ?>
-                                    </td>
-                                    <td>
-                                        <i class="fas fa-user"></i>
-                                        <?php echo htmlspecialchars($gestion['asesor_nombre'] ?? 'N/A'); ?>
-                                    </td>
-                                    <td>
-                                        <span class="tipificacion-badge">
-                                            <?php echo htmlspecialchars($gestion['tipificacion_completa'] ?? $gestion['resultado'] ?? 'N/A'); ?>
-                                        </span>
-                                        <?php 
-                                        // Mostrar detalles del acuerdo de pago si la tipificación es '03' (ACUERDO DE PAGO)
-                                        if (($gestion['resultado'] ?? '') === '03' || strpos($gestion['tipificacion_completa'] ?? '', 'ACUERDO DE PAGO') !== false): 
-                                            $numeroObligacion = $gestion['numero_obligacion'] ?? '';
-                                            $valorAcuerdo = $gestion['valor_acuerdo'] ?? null;
-                                            $valorCuota = $gestion['valor_cuota'] ?? null;
-                                            $numeroCuota = $gestion['numero_cuota'] ?? null;
-                                        ?>
-                                        <div style="margin-top: 8px; padding: 8px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 12px;">
-                                            <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px;">
-                                                <i class="fas fa-file-invoice-dollar"></i> Detalles del Acuerdo:
-                                            </div>
-                                            <?php if ($numeroObligacion): ?>
-                                            <div style="margin-bottom: 3px;">
-                                                <strong>Obligación:</strong> #<?php echo htmlspecialchars($numeroObligacion); ?>
-                                            </div>
+                                    <tr>
+                                        <td>
+                                            <i class="fas fa-calendar-alt"></i>
+                                            <?php
+                                            $fecha = $gestion['fecha_gestion'] ?? '';
+                                            if ($fecha) {
+                                                $fechaObj = new DateTime($fecha);
+                                                echo htmlspecialchars($fechaObj->format('d/m/Y H:i'));
+                                            } else {
+                                                echo 'N/A';
+                                            }
+                                            ?>
+                                        </td>
+                                        <td>
+                                            <i class="fas fa-user"></i>
+                                            <?php echo htmlspecialchars($gestion['asesor_nombre'] ?? 'N/A'); ?>
+                                        </td>
+                                        <td>
+                                            <span class="tipificacion-badge">
+                                                <?php echo htmlspecialchars($gestion['tipificacion_completa'] ?? $gestion['resultado'] ?? 'N/A'); ?>
+                                            </span>
+                                            <?php
+                                            // Mostrar detalles del acuerdo de pago si la tipificación es '03' (ACUERDO DE PAGO)
+                                            if (($gestion['resultado'] ?? '') === '03' || strpos($gestion['tipificacion_completa'] ?? '', 'ACUERDO DE PAGO') !== false):
+                                                $numeroObligacion = $gestion['numero_obligacion'] ?? '';
+                                                $valorAcuerdo = $gestion['valor_acuerdo'] ?? null;
+                                                $valorCuota = $gestion['valor_cuota'] ?? null;
+                                                $numeroCuota = $gestion['numero_cuota'] ?? null;
+                                                ?>
+                                                <div
+                                                    style="margin-top: 8px; padding: 8px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 12px;">
+                                                    <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px;">
+                                                        <i class="fas fa-file-invoice-dollar"></i> Detalles del Acuerdo:
+                                                    </div>
+                                                    <?php if ($numeroObligacion): ?>
+                                                        <div style="margin-bottom: 3px;">
+                                                            <strong>Obligación:</strong>
+                                                            #<?php echo htmlspecialchars($numeroObligacion); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <?php if ($valorAcuerdo): ?>
+                                                        <div style="margin-bottom: 3px;">
+                                                            <strong>Valor Acuerdo:</strong>
+                                                            $<?php echo number_format($valorAcuerdo, 0, ',', '.'); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <?php if ($valorCuota): ?>
+                                                        <div style="margin-bottom: 3px;">
+                                                            <strong>Valor Cuota:</strong>
+                                                            $<?php echo number_format($valorCuota, 0, ',', '.'); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <?php if ($numeroCuota): ?>
+                                                        <div>
+                                                            <strong>Número Cuota:</strong> <?php echo htmlspecialchars($numeroCuota); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
                                             <?php endif; ?>
-                                            <?php if ($valorAcuerdo): ?>
-                                            <div style="margin-bottom: 3px;">
-                                                <strong>Valor Acuerdo:</strong> $<?php echo number_format($valorAcuerdo, 0, ',', '.'); ?>
-                                            </div>
-                                            <?php endif; ?>
-                                            <?php if ($valorCuota): ?>
-                                            <div style="margin-bottom: 3px;">
-                                                <strong>Valor Cuota:</strong> $<?php echo number_format($valorCuota, 0, ',', '.'); ?>
-                                            </div>
-                                            <?php endif; ?>
-                                            <?php if ($numeroCuota): ?>
-                                            <div>
-                                                <strong>Número Cuota:</strong> <?php echo htmlspecialchars($numeroCuota); ?>
-                                            </div>
-                                            <?php endif; ?>
-                                        </div>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <button class="btn-ver-observaciones" 
+                                        </td>
+                                        <td>
+                                            <button class="btn-ver-observaciones"
                                                 onclick="mostrarObservacionesGestion(<?php echo htmlspecialchars($gestion['id'] ?? 0); ?>)"
                                                 title="Ver observaciones">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                    </td>
-                                </tr>
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
@@ -396,7 +415,8 @@
     </div>
 
     <!-- Modal de Observaciones de Gestión -->
-    <div class="modal-observaciones" id="modalObservaciones" onclick="if(event.target === this) cerrarModalObservaciones()">
+    <div class="modal-observaciones" id="modalObservaciones"
+        onclick="if(event.target === this) cerrarModalObservaciones()">
         <div class="modal-observaciones-content" onclick="event.stopPropagation()">
             <div class="modal-observaciones-header">
                 <h3><i class="fas fa-eye"></i> Observaciones de la Gestión</h3>
@@ -416,7 +436,8 @@
     </div>
 
     <!-- Modal de Búsqueda de Cliente (Navbar) -->
-    <div class="modal-buscar-cliente" id="modalBuscarCliente" onclick="if(event.target === this) cerrarModalBuscarCliente()">
+    <div class="modal-buscar-cliente" id="modalBuscarCliente"
+        onclick="if(event.target === this) cerrarModalBuscarCliente()">
         <div class="modal-buscar-content" onclick="event.stopPropagation()">
             <div class="modal-buscar-header">
                 <h3><i class="fas fa-search"></i> Buscar Cliente</h3>
@@ -430,12 +451,8 @@
                         <label for="inputBuscarCliente">
                             <i class="fas fa-id-card"></i> Cédula o Teléfono
                         </label>
-                        <input type="text" 
-                               id="inputBuscarCliente" 
-                               placeholder="Ingrese cédula o teléfono..." 
-                               autocomplete="off"
-                               minlength="2"
-                               required>
+                        <input type="text" id="inputBuscarCliente" placeholder="Ingrese cédula o teléfono..."
+                            autocomplete="off" minlength="2" required>
                     </div>
                     <div class="modal-buscar-actions">
                         <button type="submit" class="btn-primary">
@@ -452,7 +469,8 @@
     </div>
 
     <!-- Modal de Agregar Información -->
-    <div class="modal-agregar-informacion" id="modalAgregarInformacion" onclick="if(event.target === this) cerrarModalAgregarInformacion()">
+    <div class="modal-agregar-informacion" id="modalAgregarInformacion"
+        onclick="if(event.target === this) cerrarModalAgregarInformacion()">
         <div class="modal-agregar-content" onclick="event.stopPropagation()">
             <div class="modal-agregar-header">
                 <h3><i class="fas fa-plus-circle"></i> Agregar Información del Cliente</h3>
@@ -467,11 +485,8 @@
                         <label for="nuevoEmail">
                             <i class="fas fa-envelope"></i> Correo Electrónico
                         </label>
-                        <input type="email" 
-                               id="nuevoEmail" 
-                               name="email"
-                               placeholder="ejemplo@correo.com"
-                               autocomplete="off">
+                        <input type="email" id="nuevoEmail" name="email" placeholder="ejemplo@correo.com"
+                            autocomplete="off">
                         <small class="form-text">Si ingresas un correo, reemplazará el existente.</small>
                     </div>
 
@@ -482,12 +497,10 @@
                         </label>
                         <div id="telefonosContainer">
                             <div class="telefono-item">
-                                <input type="tel" 
-                                       class="telefono-input" 
-                                       placeholder="Número de teléfono"
-                                       pattern="[0-9+\-\s()]+"
-                                       autocomplete="off">
-                                <button type="button" class="btn-remove-telefono" onclick="eliminarTelefono(this)" style="display: none;">
+                                <input type="tel" class="telefono-input" placeholder="Número de teléfono"
+                                    pattern="[0-9+\-\s()]+" autocomplete="off">
+                                <button type="button" class="btn-remove-telefono" onclick="eliminarTelefono(this)"
+                                    style="display: none;">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
@@ -531,143 +544,143 @@
 
         // Inicializar softphone solo si tiene teléfono configurado
         <?php if ($tieneTelefono && !empty($datosTelefono['extension_telefono'])): ?>
-        
-        // Función para inicializar el softphone
-        function inicializarSoftphoneIncomercio() {
-            // Verificar que SIP.js esté cargado
-            if (typeof SIP === 'undefined') {
-                console.warn('⚠️ [Softphone] SIP.js aún no está cargado, reintentando en 100ms...');
-                setTimeout(inicializarSoftphoneIncomercio, 100);
-                return;
-            }
-            
-            if (typeof WebRTCSoftphone === 'undefined') {
-                console.error('❌ [Softphone] WebRTCSoftphone no está cargado');
-                return;
-            }
-            
-            if (window.webrtcSoftphone) {
-                console.warn('⚠️ [Softphone] Ya existe una instancia del softphone');
-                return;
-            }
-            
-            try {
-                window.webrtcSoftphone = new WebRTCSoftphone(webrtcConfig);
-                console.log('✅ [Softphone] Inicializado correctamente');
-            } catch (error) {
-                console.error('❌ [Softphone] Error al inicializar:', error);
-            }
-        }
 
-        // Llamar desde WebRTC
-        function llamarDesdeWebRTC(numero) {
-            if (!window.webrtcSoftphone) {
-                console.error('❌ [Softphone] No está inicializado');
-                alert('El softphone no está disponible. Por favor, espera a que se conecte.');
-                return;
+            // Función para inicializar el softphone
+            function inicializarSoftphoneIncomercio() {
+                // Verificar que SIP.js esté cargado
+                if (typeof SIP === 'undefined') {
+                    console.warn('⚠️ [Softphone] SIP.js aún no está cargado, reintentando en 100ms...');
+                    setTimeout(inicializarSoftphoneIncomercio, 100);
+                    return;
+                }
+
+                if (typeof WebRTCSoftphone === 'undefined') {
+                    console.error('❌ [Softphone] WebRTCSoftphone no está cargado');
+                    return;
+                }
+
+                if (window.webrtcSoftphone) {
+                    console.warn('⚠️ [Softphone] Ya existe una instancia del softphone');
+                    return;
+                }
+
+                try {
+                    window.webrtcSoftphone = new WebRTCSoftphone(webrtcConfig);
+                    console.log('✅ [Softphone] Inicializado correctamente');
+                } catch (error) {
+                    console.error('❌ [Softphone] Error al inicializar:', error);
+                }
             }
-            
-            // Validar que el número no esté vacío
-            if (!numero || numero.trim() === '') {
-                alert('Por favor, selecciona un número de teléfono.');
-                return;
+
+            // Llamar desde WebRTC
+            function llamarDesdeWebRTC(numero) {
+                if (!window.webrtcSoftphone) {
+                    console.error('❌ [Softphone] No está inicializado');
+                    alert('El softphone no está disponible. Por favor, espera a que se conecte.');
+                    return;
+                }
+
+                // Validar que el número no esté vacío
+                if (!numero || numero.trim() === '') {
+                    alert('Por favor, selecciona un número de teléfono.');
+                    return;
+                }
+
+                // Limpiar el número (solo dígitos)
+                const numeroLimpio = numero.toString().replace(/\D/g, '');
+
+                if (numeroLimpio === '') {
+                    alert('El número de teléfono no es válido.');
+                    return;
+                }
+
+                console.log('📞 [Llamar] Iniciando llamada al número:', numeroLimpio);
+
+                // Usar callNumber() que establece el número y luego llama automáticamente
+                if (typeof window.webrtcSoftphone.callNumber === 'function') {
+                    window.webrtcSoftphone.callNumber(numeroLimpio);
+                    console.log('✅ [Llamar] Llamada iniciada correctamente');
+                } else {
+                    // Fallback: establecer número y luego llamar
+                    if (typeof window.webrtcSoftphone.setNumber === 'function') {
+                        window.webrtcSoftphone.setNumber(numeroLimpio);
+                        setTimeout(() => {
+                            if (typeof window.webrtcSoftphone.makeCall === 'function') {
+                                window.webrtcSoftphone.makeCall();
+                            }
+                        }, 100);
+                    } else {
+                        console.error('❌ [Llamar] Métodos callNumber o setNumber no disponibles');
+                        alert('Error: No se pudo iniciar la llamada. Por favor, intenta nuevamente.');
+                    }
+                }
             }
-            
-            // Limpiar el número (solo dígitos)
-            const numeroLimpio = numero.toString().replace(/\D/g, '');
-            
-            if (numeroLimpio === '') {
-                alert('El número de teléfono no es válido.');
-                return;
-            }
-            
-            console.log('📞 [Llamar] Iniciando llamada al número:', numeroLimpio);
-            
-            // Usar callNumber() que establece el número y luego llama automáticamente
-            if (typeof window.webrtcSoftphone.callNumber === 'function') {
-                window.webrtcSoftphone.callNumber(numeroLimpio);
-                console.log('✅ [Llamar] Llamada iniciada correctamente');
-            } else {
-                // Fallback: establecer número y luego llamar
-                if (typeof window.webrtcSoftphone.setNumber === 'function') {
-                    window.webrtcSoftphone.setNumber(numeroLimpio);
-                    setTimeout(() => {
-                        if (typeof window.webrtcSoftphone.makeCall === 'function') {
-                            window.webrtcSoftphone.makeCall();
+
+            // Esperar a que todos los scripts estén cargados
+            let intentosEspera = 0;
+            const maxIntentos = 50; // 5 segundos máximo (50 * 100ms)
+
+            function esperarScriptsYInicializar() {
+                intentosEspera++;
+
+                // Verificar que SIP.js esté disponible
+                if (typeof SIP === 'undefined') {
+                    if (intentosEspera < maxIntentos) {
+                        if (intentosEspera % 10 === 0) {
+                            console.log(`⏳ [Softphone] Esperando a que SIP.js se cargue... (intento ${intentosEspera}/${maxIntentos})`);
                         }
-                    }, 100);
-                } else {
-                    console.error('❌ [Llamar] Métodos callNumber o setNumber no disponibles');
-                    alert('Error: No se pudo iniciar la llamada. Por favor, intenta nuevamente.');
-                }
-            }
-        }
-
-        // Esperar a que todos los scripts estén cargados
-        let intentosEspera = 0;
-        const maxIntentos = 50; // 5 segundos máximo (50 * 100ms)
-        
-        function esperarScriptsYInicializar() {
-            intentosEspera++;
-            
-            // Verificar que SIP.js esté disponible
-            if (typeof SIP === 'undefined') {
-                if (intentosEspera < maxIntentos) {
-                    if (intentosEspera % 10 === 0) {
-                        console.log(`⏳ [Softphone] Esperando a que SIP.js se cargue... (intento ${intentosEspera}/${maxIntentos})`);
+                        setTimeout(esperarScriptsYInicializar, 100);
+                    } else {
+                        console.error('❌ [Softphone] Timeout: SIP.js no se cargó después de 5 segundos');
                     }
-                    setTimeout(esperarScriptsYInicializar, 100);
-                } else {
-                    console.error('❌ [Softphone] Timeout: SIP.js no se cargó después de 5 segundos');
+                    return;
                 }
-                return;
-            }
-            
-            // Verificar que WebRTCSoftphone esté disponible
-            if (typeof WebRTCSoftphone === 'undefined') {
-                if (intentosEspera < maxIntentos) {
-                    if (intentosEspera % 10 === 0) {
-                        console.log(`⏳ [Softphone] Esperando a que softphone-web.js se cargue... (intento ${intentosEspera}/${maxIntentos})`);
-                    }
-                    setTimeout(esperarScriptsYInicializar, 100);
-                } else {
-                    console.error('❌ [Softphone] Timeout: softphone-web.js no se cargó después de 5 segundos');
-                }
-                return;
-            }
-            
-            // Verificar que el contenedor exista
-            const container = document.getElementById('webrtc-softphone');
-            if (!container) {
-                if (intentosEspera < maxIntentos) {
-                    setTimeout(esperarScriptsYInicializar, 100);
-                } else {
-                    console.error('❌ [Softphone] No se encontró el contenedor #webrtc-softphone');
-                }
-                return;
-            }
-            
-            // Todo está listo, inicializar
-            console.log('✅ [Softphone] Todos los scripts están cargados, inicializando...');
-            inicializarSoftphoneIncomercio();
-        }
 
-        // Función para inicializar cuando los scripts estén listos (definida antes de cargar scripts)
-        window.inicializarSoftphoneCuandoListo = function() {
-            // Resetear contador de intentos
-            intentosEspera = 0;
-            // Esperar un momento adicional para asegurar que todo esté completamente cargado
-            setTimeout(function() {
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', esperarScriptsYInicializar);
-                } else {
-                    esperarScriptsYInicializar();
+                // Verificar que WebRTCSoftphone esté disponible
+                if (typeof WebRTCSoftphone === 'undefined') {
+                    if (intentosEspera < maxIntentos) {
+                        if (intentosEspera % 10 === 0) {
+                            console.log(`⏳ [Softphone] Esperando a que softphone-web.js se cargue... (intento ${intentosEspera}/${maxIntentos})`);
+                        }
+                        setTimeout(esperarScriptsYInicializar, 100);
+                    } else {
+                        console.error('❌ [Softphone] Timeout: softphone-web.js no se cargó después de 5 segundos');
+                    }
+                    return;
                 }
-            }, 100);
-        };
-        
+
+                // Verificar que el contenedor exista
+                const container = document.getElementById('webrtc-softphone');
+                if (!container) {
+                    if (intentosEspera < maxIntentos) {
+                        setTimeout(esperarScriptsYInicializar, 100);
+                    } else {
+                        console.error('❌ [Softphone] No se encontró el contenedor #webrtc-softphone');
+                    }
+                    return;
+                }
+
+                // Todo está listo, inicializar
+                console.log('✅ [Softphone] Todos los scripts están cargados, inicializando...');
+                inicializarSoftphoneIncomercio();
+            }
+
+            // Función para inicializar cuando los scripts estén listos (definida antes de cargar scripts)
+            window.inicializarSoftphoneCuandoListo = function () {
+                // Resetear contador de intentos
+                intentosEspera = 0;
+                // Esperar un momento adicional para asegurar que todo esté completamente cargado
+                setTimeout(function () {
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', esperarScriptsYInicializar);
+                    } else {
+                        esperarScriptsYInicializar();
+                    }
+                }, 100);
+            };
+
         <?php else: ?>
-        console.warn('⚠️ [Softphone] Usuario sin teléfono configurado');
+            console.warn('⚠️ [Softphone] Usuario sin teléfono configurado');
         <?php endif; ?>
     </script>
 
@@ -676,67 +689,67 @@
 
     <!-- Scripts - CARGAR PRIMERO asesor-gestionar.js para que esté disponible -->
     <script>
-        // CRÍTICO: Cargar asesor-gestionar.js PRIMERO para que cambiarClienteSinRecargar esté disponible
-        (function() {
-            console.log('📦 [Carga Scripts] Iniciando carga de scripts...');
-            
-            // Paso 1: Cargar asesor-gestionar.js PRIMERO (sin dependencias)
-            const asesorScript = document.createElement('script');
-            asesorScript.src = 'assets/js/asesor-gestionar.js';
-            asesorScript.onload = function() {
-                console.log('✅ [Carga Scripts] asesor-gestionar.js cargado - cambiarClienteSinRecargar disponible');
-                
-                // Paso 2: Cargar SIP.js
-                const sipScript = document.createElement('script');
-                sipScript.src = 'assets/js/sip.min.js';
-                sipScript.onload = function() {
-                    console.log('✅ [Carga Scripts] SIP.js cargado');
-                    
-                    // Paso 3: Cargar softphone-web.js
-                    const softphoneScript = document.createElement('script');
-                    softphoneScript.src = 'assets/js/softphone-web.js';
-                    softphoneScript.onload = function() {
-                        console.log('✅ [Carga Scripts] softphone-web.js cargado');
-                        
-                        // Paso 4: Inicializar softphone si está configurado
-                        if (typeof window.inicializarSoftphoneCuandoListo === 'function') {
-                            window.inicializarSoftphoneCuandoListo();
-                        }
-                    };
-                    softphoneScript.onerror = function() {
-                        console.error('❌ [Carga Scripts] Error al cargar softphone-web.js');
-                    };
-                    document.head.appendChild(softphoneScript);
-                };
-                sipScript.onerror = function() {
-                    console.error('❌ [Carga Scripts] Error al cargar SIP.js, intentando CDN...');
-                    const sipScriptCDN = document.createElement('script');
-                    sipScriptCDN.src = 'https://cdn.jsdelivr.net/npm/sip.js@0.20.0/dist/sip.min.js';
-                    sipScriptCDN.onload = function() {
-                        console.log('✅ [Carga Scripts] SIP.js cargado desde CDN');
+            // CRÍTICO: Cargar asesor-gestionar.js PRIMERO para que cambiarClienteSinRecargar esté disponible
+            (function () {
+                console.log('📦 [Carga Scripts] Iniciando carga de scripts...');
+
+                // Paso 1: Cargar asesor-gestionar.js PRIMERO (sin dependencias)
+                const asesorScript = document.createElement('script');
+                asesorScript.src = 'assets/js/asesor-gestionar.js';
+                asesorScript.onload = function () {
+                    console.log('✅ [Carga Scripts] asesor-gestionar.js cargado - cambiarClienteSinRecargar disponible');
+
+                    // Paso 2: Cargar SIP.js
+                    const sipScript = document.createElement('script');
+                    sipScript.src = 'assets/js/sip.min.js';
+                    sipScript.onload = function () {
+                        console.log('✅ [Carga Scripts] SIP.js cargado');
+
+                        // Paso 3: Cargar softphone-web.js
                         const softphoneScript = document.createElement('script');
-                        softphoneScript.src = 'assets/js/softphone-web.js';
-                        softphoneScript.onload = function() {
+                        softphoneScript.src = 'assets/js/softphone-web.js?v=' + new Date().getTime();
+                        softphoneScript.onload = function () {
                             console.log('✅ [Carga Scripts] softphone-web.js cargado');
+
+                            // Paso 4: Inicializar softphone si está configurado
                             if (typeof window.inicializarSoftphoneCuandoListo === 'function') {
                                 window.inicializarSoftphoneCuandoListo();
                             }
                         };
+                        softphoneScript.onerror = function () {
+                            console.error('❌ [Carga Scripts] Error al cargar softphone-web.js');
+                        };
                         document.head.appendChild(softphoneScript);
                     };
-                    sipScriptCDN.onerror = function() {
-                        console.error('❌ [Carga Scripts] Error: No se pudo cargar SIP.js');
+                    sipScript.onerror = function () {
+                        console.error('❌ [Carga Scripts] Error al cargar SIP.js, intentando CDN...');
+                        const sipScriptCDN = document.createElement('script');
+                        sipScriptCDN.src = 'https://cdn.jsdelivr.net/npm/sip.js@0.20.0/dist/sip.min.js';
+                        sipScriptCDN.onload = function () {
+                            console.log('✅ [Carga Scripts] SIP.js cargado desde CDN');
+                            const softphoneScript = document.createElement('script');
+                            softphoneScript.src = 'assets/js/softphone-web.js?v=' + new Date().getTime();
+                            softphoneScript.onload = function () {
+                                console.log('✅ [Carga Scripts] softphone-web.js cargado');
+                                if (typeof window.inicializarSoftphoneCuandoListo === 'function') {
+                                    window.inicializarSoftphoneCuandoListo();
+                                }
+                            };
+                            document.head.appendChild(softphoneScript);
+                        };
+                        sipScriptCDN.onerror = function () {
+                            console.error('❌ [Carga Scripts] Error: No se pudo cargar SIP.js');
+                        };
+                        document.head.appendChild(sipScriptCDN);
                     };
-                    document.head.appendChild(sipScriptCDN);
+                    document.head.appendChild(sipScript);
                 };
-                document.head.appendChild(sipScript);
-            };
-            asesorScript.onerror = function() {
-                console.error('❌ [Carga Scripts] ERROR CRÍTICO: No se pudo cargar asesor-gestionar.js');
-                alert('Error crítico: No se pudo cargar el script necesario. Por favor, recarga la página.');
-            };
-            document.head.appendChild(asesorScript);
-        })();
+                asesorScript.onerror = function () {
+                    console.error('❌ [Carga Scripts] ERROR CRÍTICO: No se pudo cargar asesor-gestionar.js');
+                    alert('Error crítico: No se pudo cargar el script necesario. Por favor, recarga la página.');
+                };
+                document.head.appendChild(asesorScript);
+            })();
     </script>
 
     <script>
@@ -780,7 +793,7 @@
             const recibirDiv = document.getElementById('subcategoria_recibir_llamada');
             const opcionesHacer = document.getElementById('opciones_especificas_hacer');
             const opcionesRecibir = document.getElementById('opciones_especificas_recibir');
-            
+
             if (tipo === 'hacer_llamada') {
                 hacerDiv.style.display = 'block';
                 recibirDiv.style.display = 'none';
@@ -800,12 +813,12 @@
         function mostrarOpcionesEspecificasHacer(subcategoria) {
             const opcionesDiv = document.getElementById('opciones_especificas_hacer');
             const select = document.getElementById('opcion_especifica_hacer');
-            
+
             if (!opcionesEspecificas[subcategoria]) {
                 opcionesDiv.style.display = 'none';
                 return;
             }
-            
+
             select.innerHTML = '<option value="">Seleccione...</option>';
             opcionesEspecificas[subcategoria].forEach(op => {
                 const option = document.createElement('option');
@@ -813,19 +826,19 @@
                 option.textContent = op.text;
                 select.appendChild(option);
             });
-            
+
             opcionesDiv.style.display = 'block';
         }
 
         function mostrarOpcionesEspecificasRecibir(subcategoria) {
             const opcionesDiv = document.getElementById('opciones_especificas_recibir');
             const select = document.getElementById('opcion_especifica_recibir');
-            
+
             if (!opcionesEspecificas[subcategoria]) {
                 opcionesDiv.style.display = 'none';
                 return;
             }
-            
+
             select.innerHTML = '<option value="">Seleccione...</option>';
             opcionesEspecificas[subcategoria].forEach(op => {
                 const option = document.createElement('option');
@@ -833,17 +846,17 @@
                 option.textContent = op.text;
                 select.appendChild(option);
             });
-            
+
             opcionesDiv.style.display = 'block';
         }
 
         function seleccionarOpcionEspecificaHacer(valor) {
             document.getElementById('sub_tipificacion_hidden').value = valor;
             document.getElementById('tipificacion_principal').value = 'hacer_llamada';
-            
+
             const obligacionSelect = document.getElementById('obligacion_seleccionada');
             const obligacionRequiredIndicator = document.getElementById('obligacion_required_indicator');
-            
+
             // Mostrar campos de acuerdo de pago si es '03'
             if (valor === '03') {
                 document.getElementById('campos_acuerdo_pago').classList.add('active');
@@ -851,14 +864,14 @@
                 if (obligacionSelect) {
                     obligacionSelect.required = true;
                     obligacionSelect.setAttribute('data-required-for-acuerdo', 'true');
-                    
+
                     // Deshabilitar la opción "Ninguna" cuando es acuerdo de pago
                     const opcionNinguna = obligacionSelect.querySelector('option[value="ninguna"]');
                     if (opcionNinguna) {
                         opcionNinguna.disabled = true;
                         opcionNinguna.style.display = 'none'; // Ocultar visualmente
                     }
-                    
+
                     // Si está seleccionada "Ninguna", cambiarla a la primera obligación disponible
                     if (obligacionSelect.value === 'ninguna') {
                         const primeraObligacion = obligacionSelect.querySelector('option:not([value="ninguna"]):not([disabled])');
@@ -880,7 +893,7 @@
                 if (obligacionSelect && obligacionSelect.getAttribute('data-required-for-acuerdo') === 'true') {
                     obligacionSelect.required = false;
                     obligacionSelect.removeAttribute('data-required-for-acuerdo');
-                    
+
                     // Restaurar la opción "Ninguna" cuando no es acuerdo de pago
                     const opcionNinguna = obligacionSelect.querySelector('option[value="ninguna"]');
                     if (opcionNinguna) {
@@ -897,10 +910,10 @@
         function seleccionarOpcionEspecificaRecibir(valor) {
             document.getElementById('sub_tipificacion_hidden').value = valor;
             document.getElementById('tipificacion_principal').value = 'recibir_llamada';
-            
+
             const obligacionSelect = document.getElementById('obligacion_seleccionada');
             const obligacionRequiredIndicator = document.getElementById('obligacion_required_indicator');
-            
+
             // Mostrar campos de acuerdo de pago si es '03'
             if (valor === '03') {
                 document.getElementById('campos_acuerdo_pago').classList.add('active');
@@ -908,14 +921,14 @@
                 if (obligacionSelect) {
                     obligacionSelect.required = true;
                     obligacionSelect.setAttribute('data-required-for-acuerdo', 'true');
-                    
+
                     // Deshabilitar la opción "Ninguna" cuando es acuerdo de pago
                     const opcionNinguna = obligacionSelect.querySelector('option[value="ninguna"]');
                     if (opcionNinguna) {
                         opcionNinguna.disabled = true;
                         opcionNinguna.style.display = 'none'; // Ocultar visualmente
                     }
-                    
+
                     // Si está seleccionada "Ninguna", cambiarla a la primera obligación disponible
                     if (obligacionSelect.value === 'ninguna') {
                         const primeraObligacion = obligacionSelect.querySelector('option:not([value="ninguna"]):not([disabled])');
@@ -937,7 +950,7 @@
                 if (obligacionSelect && obligacionSelect.getAttribute('data-required-for-acuerdo') === 'true') {
                     obligacionSelect.required = false;
                     obligacionSelect.removeAttribute('data-required-for-acuerdo');
-                    
+
                     // Restaurar la opción "Ninguna" cuando no es acuerdo de pago
                     const opcionNinguna = obligacionSelect.querySelector('option[value="ninguna"]');
                     if (opcionNinguna) {
@@ -966,7 +979,7 @@
         function manejarSeleccionObligacion() {
             const select = document.getElementById('obligacion_seleccionada');
             const option = select.options[select.selectedIndex];
-            
+
             document.getElementById('producto_gestionado').value = option.dataset.producto || '';
             document.getElementById('monto_obligacion').value = option.dataset.monto || '';
             document.getElementById('numero_obligacion').value = option.dataset.obligacion || '';
@@ -979,14 +992,14 @@
             document.getElementById('subcategoria_recibir_llamada').style.display = 'none';
             document.getElementById('opciones_especificas_hacer').style.display = 'none';
             document.getElementById('opciones_especificas_recibir').style.display = 'none';
-            
+
             // Limpiar estado de obligatorio del campo de obligación
             const obligacionSelect = document.getElementById('obligacion_seleccionada');
             const obligacionRequiredIndicator = document.getElementById('obligacion_required_indicator');
             if (obligacionSelect) {
                 obligacionSelect.required = false;
                 obligacionSelect.removeAttribute('data-required-for-acuerdo');
-                
+
                 // Restaurar la opción "Ninguna" cuando se resetea el formulario
                 const opcionNinguna = obligacionSelect.querySelector('option[value="ninguna"]');
                 if (opcionNinguna) {
@@ -1005,34 +1018,34 @@
                 alert('Error: No se encontró el selector de teléfono.');
                 return;
             }
-            
+
             const numero = select.value;
             if (!numero || numero.trim() === '') {
                 alert('Por favor, selecciona un número de teléfono del desplegable.');
                 return;
             }
-            
+
             console.log('📞 [Llamar] Número seleccionado:', numero);
-            
+
             // Verificar que el softphone esté disponible
             if (!window.webrtcSoftphone) {
                 alert('El softphone no está disponible. Por favor, espera a que se conecte al servidor.');
                 return;
             }
-            
+
             // Verificar que esté registrado
             if (!window.webrtcSoftphone.isRegistered) {
                 alert('El softphone no está conectado al servidor. Por favor, espera a que se conecte.');
                 return;
             }
-            
+
             // Verificar que no haya una llamada activa
             if (window.webrtcSoftphone.currentCall) {
                 const call = window.webrtcSoftphone.currentCall;
                 const state = call.state;
                 const stateStr = String(state);
                 const hayLlamada = stateStr === 'Established' || stateStr === '4' || state === 'Established';
-                
+
                 if (hayLlamada) {
                     if (!confirm('Ya hay una llamada en curso. ¿Deseas colgar la llamada actual y llamar a este número?')) {
                         return;
@@ -1046,7 +1059,7 @@
                     return;
                 }
             }
-            
+
             // Iniciar la llamada
             llamarDesdeWebRTC(numero);
         }
@@ -1064,7 +1077,7 @@
         // Navegación - NUNCA recargar la página
         async function irAlSiguienteCliente() {
             console.log('➡️ [Navegación] Obteniendo siguiente cliente...');
-            
+
             // Esperar a que cambiarClienteSinRecargar esté disponible
             let intentos = 0;
             const maxIntentos = 50;
@@ -1072,34 +1085,34 @@
                 await new Promise(resolve => setTimeout(resolve, 100));
                 intentos++;
             }
-            
+
             if (typeof window.cambiarClienteSinRecargar !== 'function') {
                 console.error('❌ [Navegación] cambiarClienteSinRecargar no disponible después de esperar');
                 alert('Error: El script necesario no se cargó. Por favor, recarga la página.');
                 return;
             }
-            
+
             // Verificar si hay llamada activa (solo para logging, no bloquear)
             if (window.webrtcSoftphone && window.webrtcSoftphone.currentCall) {
                 const call = window.webrtcSoftphone.currentCall;
                 const state = call.state;
                 const stateStr = String(state);
                 const hayLlamada = stateStr === 'Established' || stateStr === '4' || state === 'Established';
-                
+
                 if (hayLlamada) {
                     console.log('📞 [Navegación] Hay llamada activa detectada - Cambiando cliente sin interrumpir la llamada');
                 }
             }
-            
+
             try {
                 const response = await fetch('index.php?action=obtener_siguiente_cliente');
                 const data = await response.json();
-                
+
                 if (data.success && data.siguiente_cliente) {
                     const clienteId = data.siguiente_cliente.id;
                     console.log('✅ [Navegación] Siguiente cliente encontrado:', clienteId);
                     console.log('✅ [Navegación] Usando cambiarClienteSinRecargar para mantener la llamada activa');
-                    
+
                     // SIEMPRE usar cambiarClienteSinRecargar - NUNCA recargar
                     window.cambiarClienteSinRecargar(clienteId);
                 } else {
@@ -1117,19 +1130,19 @@
          */
         function abrirModalBuscarCliente() {
             console.log('🔍 [Búsqueda] Abriendo modal de búsqueda de cliente');
-            
+
             // Verificar si hay llamada activa para logging (pero no bloquear la búsqueda)
             if (window.webrtcSoftphone && window.webrtcSoftphone.currentCall) {
                 const call = window.webrtcSoftphone.currentCall;
                 const state = call.state;
                 const stateStr = String(state);
                 const hayLlamada = stateStr === 'Established' || stateStr === '4' || state === 'Established';
-                
+
                 if (hayLlamada) {
                     console.log('📞 [Búsqueda] Hay llamada activa - El usuario puede buscar sin interrumpir la llamada');
                 }
             }
-            
+
             const modal = document.getElementById('modalBuscarCliente');
             if (modal) {
                 modal.classList.add('active');
@@ -1163,26 +1176,26 @@
          */
         async function buscarClienteNavbar(event) {
             event.preventDefault();
-            
+
             const termino = document.getElementById('inputBuscarCliente').value.trim();
             const resultadosDiv = document.getElementById('resultadosBuscarCliente');
-            
+
             if (termino.length < 2) {
                 resultadosDiv.innerHTML = '<div class="modal-buscar-empty"><i class="fas fa-info-circle"></i><div>Ingrese al menos 2 caracteres</div></div>';
                 return;
             }
-            
+
             resultadosDiv.innerHTML = '<div class="modal-buscar-loading"><i class="fas fa-spinner fa-spin"></i><div>Buscando...</div></div>';
-            
+
             try {
                 const response = await fetch('index.php?action=buscar_cliente_asesor', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ termino, criterio: 'auto' })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success && data.clientes && data.clientes.length > 0) {
                     mostrarResultadosBuscarCliente(data.clientes);
                 } else {
@@ -1200,30 +1213,30 @@
          */
         function mostrarResultadosBuscarCliente(clientes) {
             const resultadosDiv = document.getElementById('resultadosBuscarCliente');
-            
+
             if (!clientes || clientes.length === 0) {
                 resultadosDiv.innerHTML = '<div class="modal-buscar-empty"><i class="fas fa-search"></i><div>No se encontraron clientes</div></div>';
                 return;
             }
-            
-            resultadosDiv.innerHTML = clientes.map(function(cliente) {
+
+            resultadosDiv.innerHTML = clientes.map(function (cliente) {
                 // Asegurar que el ID existe y es válido
                 const clienteId = cliente.id || cliente.ID_CLIENTE || cliente.id_cliente;
-                
+
                 if (!clienteId) {
                     console.error('❌ [Búsqueda] Cliente sin ID válido:', cliente);
                     return ''; // Saltar este cliente
                 }
-                
+
                 const nombre = cliente.nombre || 'Sin nombre';
                 const cedula = cliente.cedula || 'N/A';
                 const telefono = cliente.telefono || cliente.celular2 || 'N/A';
-                
+
                 // Usar data-attribute en lugar de onclick directo para mayor seguridad
                 return '<div class="modal-buscar-result-item" data-cliente-id="' + clienteId + '" onclick="seleccionarClienteDesdeBusqueda(' + clienteId + ')">' +
-                       '<strong><i class="fas fa-user"></i> ' + nombre + '</strong>' +
-                       '<small><i class="fas fa-id-card"></i> Cédula: ' + cedula + ' | <i class="fas fa-phone"></i> Tel: ' + telefono + '</small>' +
-                       '</div>';
+                    '<strong><i class="fas fa-user"></i> ' + nombre + '</strong>' +
+                    '<small><i class="fas fa-id-card"></i> Cédula: ' + cedula + ' | <i class="fas fa-phone"></i> Tel: ' + telefono + '</small>' +
+                    '</div>';
             }).filter(html => html !== '').join(''); // Filtrar elementos vacíos
         }
 
@@ -1234,14 +1247,14 @@
          */
         async function seleccionarClienteDesdeBusqueda(clienteId) {
             console.log('🔍 [Búsqueda] Seleccionando cliente desde búsqueda:', clienteId, '(tipo:', typeof clienteId + ')');
-            
+
             // Validar que el ID existe y es válido
             if (!clienteId || clienteId === 'undefined' || clienteId === 'null' || clienteId === '') {
                 console.error('❌ [Búsqueda] ID de cliente inválido:', clienteId);
                 alert('Error: ID de cliente inválido. Por favor, intenta nuevamente.');
                 return;
             }
-            
+
             // Convertir a número si es string
             const idNumerico = Number(clienteId);
             if (isNaN(idNumerico) || idNumerico <= 0) {
@@ -1249,9 +1262,9 @@
                 alert('Error: ID de cliente no válido. Por favor, intenta nuevamente.');
                 return;
             }
-            
+
             console.log('✅ [Búsqueda] ID validado:', idNumerico);
-            
+
             // Esperar a que cambiarClienteSinRecargar esté disponible
             let intentos = 0;
             const maxIntentos = 50;
@@ -1259,27 +1272,27 @@
                 await new Promise(resolve => setTimeout(resolve, 100));
                 intentos++;
             }
-            
+
             if (typeof window.cambiarClienteSinRecargar !== 'function') {
                 console.error('❌ [Búsqueda] cambiarClienteSinRecargar no disponible después de esperar');
                 alert('Error: El script necesario no se cargó. Por favor, recarga la página.');
                 return;
             }
-            
+
             // Verificar si hay llamada activa (solo para logging, no bloquear)
             if (window.webrtcSoftphone && window.webrtcSoftphone.currentCall) {
                 const call = window.webrtcSoftphone.currentCall;
                 const state = call.state;
                 const stateStr = String(state);
                 const hayLlamada = stateStr === 'Established' || stateStr === '4' || state === 'Established';
-                
+
                 if (hayLlamada) {
                     console.log('📞 [Búsqueda] Hay llamada activa detectada - Cambiando cliente sin interrumpir la llamada');
                 }
             }
-            
+
             cerrarModalBuscarCliente();
-            
+
             // SIEMPRE usar cambiarClienteSinRecargar - NUNCA recargar
             console.log('✅ [Búsqueda] Usando cambiarClienteSinRecargar para mantener la llamada activa');
             console.log('✅ [Búsqueda] Llamando cambiarClienteSinRecargar con ID:', idNumerico);
@@ -1287,7 +1300,7 @@
         }
 
         // Cerrar modal con ESC
-        document.addEventListener('keydown', function(event) {
+        document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
                 cerrarModalBuscarCliente();
                 cerrarModalObservaciones();
@@ -1343,7 +1356,7 @@
                 </button>
             `;
             container.appendChild(nuevoItem);
-            
+
             // Mostrar botones de eliminar si hay más de un campo
             actualizarVisibilidadBotonesEliminar();
         }
@@ -1370,10 +1383,10 @@
 
         async function guardarInformacionCliente(event) {
             event.preventDefault();
-            
-            const clienteId = document.getElementById('inputClienteId')?.value || 
-                             document.querySelector('input[name="cliente_id"]')?.value;
-            
+
+            const clienteId = document.getElementById('inputClienteId')?.value ||
+                document.querySelector('input[name="cliente_id"]')?.value;
+
             if (!clienteId) {
                 alert('Error: No se encontró el ID del cliente.');
                 return;
@@ -1382,7 +1395,7 @@
             // Obtener correo
             const emailInput = document.getElementById('nuevoEmail');
             const email = emailInput ? emailInput.value.trim() : '';
-            
+
             // Obtener teléfonos
             const telefonosInputs = document.querySelectorAll('#telefonosContainer .telefono-input');
             const telefonos = Array.from(telefonosInputs)
@@ -1406,7 +1419,7 @@
                 cliente_id: clienteId,
                 telefonos: telefonos
             };
-            
+
             // SIEMPRE incluir email si tiene valor (para reemplazar el existente)
             // Si el email está vacío, no incluirlo en el objeto para que no se actualice
             if (email && email.length > 0) {
@@ -1443,7 +1456,7 @@
                 if (data.success) {
                     alert('Información guardada exitosamente.');
                     cerrarModalAgregarInformacion();
-                    
+
                     // Actualizar solo correo y teléfonos sin recargar toda la información
                     await actualizarCorreoYTelefonos(email, telefonos);
                 } else {
@@ -1463,17 +1476,17 @@
          */
         async function actualizarCorreoYTelefonos(nuevoEmail, nuevosTelefonos) {
             console.log('🔄 [Actualizar Info] Actualizando correo y teléfonos en la vista...');
-            
+
             const panelCliente = document.querySelector('.panel-cliente');
             if (!panelCliente) {
                 console.warn('⚠️ [Actualizar Info] Panel cliente no encontrado');
                 return;
             }
-            
+
             // Actualizar correo
             const infoItems = panelCliente.querySelectorAll('.cliente-info-item');
             let emailItem = null;
-            
+
             // Buscar el item que contiene "Correo"
             infoItems.forEach(item => {
                 const strong = item.querySelector('strong');
@@ -1481,7 +1494,7 @@
                     emailItem = item;
                 }
             });
-            
+
             if (nuevoEmail && nuevoEmail.trim() !== '') {
                 // Si hay email nuevo, actualizar o crear el elemento
                 if (emailItem) {
@@ -1498,7 +1511,7 @@
                         const strong = item.querySelector('strong');
                         return strong && strong.textContent.includes('Cédula');
                     });
-                    
+
                     if (cedulaItem) {
                         emailItem = document.createElement('div');
                         emailItem.className = 'cliente-info-item';
@@ -1518,22 +1531,22 @@
                     console.log('⚠️ [Actualizar Info] Email vacío, elemento ocultado');
                 }
             }
-            
+
             // Actualizar teléfonos
             if (nuevosTelefonos && nuevosTelefonos.length > 0) {
                 // Obtener datos actuales del cliente para combinar con los nuevos teléfonos
-                const clienteId = document.getElementById('inputClienteId')?.value || 
-                                 document.querySelector('input[name="cliente_id"]')?.value;
-                
+                const clienteId = document.getElementById('inputClienteId')?.value ||
+                    document.querySelector('input[name="cliente_id"]')?.value;
+
                 if (clienteId) {
                     try {
                         // Obtener datos actualizados del cliente
                         const response = await fetch(`index.php?action=obtener_datos_cliente&id=${encodeURIComponent(clienteId)}`);
                         const contentType = response.headers.get('content-type') || '';
-                        
+
                         if (contentType.includes('application/json')) {
                             const data = await response.json();
-                            
+
                             if (data.success && data.cliente) {
                                 // Actualizar teléfonos usando la función renderTelefonos
                                 if (typeof window.renderTelefonos === 'function') {
@@ -1549,7 +1562,7 @@
                     }
                 }
             }
-            
+
             console.log('✅ [Actualizar Info] Actualización completada');
         }
 
@@ -1567,62 +1580,62 @@
          */
         async function mostrarObservacionesGestion(gestionId) {
             console.log('👁️ [Observaciones] mostrarObservacionesGestion llamado con ID:', gestionId, '(tipo:', typeof gestionId + ')');
-            
+
             // Validar ID
             if (!gestionId || gestionId === 0 || gestionId === '0' || gestionId === 'undefined' || gestionId === 'null') {
                 console.error('❌ [Observaciones] ID de gestión inválido:', gestionId);
                 alert('Error: ID de gestión inválido. Por favor, intenta nuevamente.');
                 return;
             }
-            
+
             const modal = document.getElementById('modalObservaciones');
             const contenido = document.getElementById('observacionesContenido');
-            
+
             if (!modal) {
                 console.error('❌ [Observaciones] ERROR: Modal #modalObservaciones no encontrado en el DOM');
                 alert('Error: No se encontró el modal de observaciones. Por favor, recarga la página.');
                 return;
             }
-            
+
             if (!contenido) {
                 console.error('❌ [Observaciones] ERROR: Contenedor #observacionesContenido no encontrado en el DOM');
                 alert('Error: No se encontró el contenedor de observaciones. Por favor, recarga la página.');
                 return;
             }
-            
+
             console.log('✅ [Observaciones] Modal y contenedor encontrados');
-            
+
             // Mostrar modal con loading
             modal.classList.add('active');
             console.log('✅ [Observaciones] Modal activado (clase "active" agregada)');
-            
+
             // Verificar que el modal se muestra
             const modalStyles = window.getComputedStyle(modal);
             console.log('📋 [Observaciones] Estilos del modal - display:', modalStyles.display, 'z-index:', modalStyles.zIndex);
-            
+
             contenido.innerHTML = `
                 <div class="loading-observaciones">
                     <i class="fas fa-spinner fa-spin"></i>
                     <p>Cargando observaciones...</p>
                 </div>
             `;
-            
+
             try {
                 console.log(`📡 [Observaciones] Haciendo fetch a: index.php?action=obtener_detalles_gestion&id=${gestionId}`);
-                
+
                 const response = await fetch(`index.php?action=obtener_detalles_gestion&id=${encodeURIComponent(gestionId)}`);
-                
+
                 console.log(`📥 [Observaciones] Respuesta recibida. Status: ${response.status} ${response.statusText}`);
-                
+
                 // Verificar Content-Type
                 const contentType = response.headers.get('content-type') || '';
                 console.log(`📋 [Observaciones] Content-Type: ${contentType}`);
-                
+
                 if (!contentType.includes('application/json')) {
                     const text = await response.text();
                     console.error('❌ [Observaciones] ERROR: Respuesta no es JSON. Preview:', text.substring(0, 300));
                     console.error('❌ [Observaciones] Respuesta completa (primeros 500 caracteres):', text.substring(0, 500));
-                    
+
                     contenido.innerHTML = `
                         <div class="error-observaciones">
                             <i class="fas fa-exclamation-triangle"></i>
@@ -1638,29 +1651,29 @@
                     `;
                     return;
                 }
-                
+
                 const data = await response.json();
                 console.log('✅ [Observaciones] JSON parseado correctamente');
                 console.log('📊 [Observaciones] Datos recibidos:', data);
-                
+
                 if (data.success && data.gestion) {
                     const gestion = data.gestion;
                     const fecha = gestion.fecha_gestion || 'N/A';
                     const asesor = gestion.asesor_nombre || 'N/A';
                     const tipificacion = gestion.tipificacion_completa || gestion.resultado || gestion.tipo_gestion || 'N/A';
-                    
+
                     // Obtener comentarios - verificar múltiples campos posibles
                     let comentarios = gestion.comentarios || gestion.observaciones || '';
-                    
+
                     console.log('📝 [Observaciones] Comentarios encontrados:', comentarios ? 'Sí' : 'No', comentarios.length, 'caracteres');
                     console.log('📝 [Observaciones] Preview comentarios:', comentarios.substring(0, 100));
-                    
+
                     // Si está vacío o es null, mostrar mensaje
                     if (!comentarios || comentarios.trim() === '') {
                         comentarios = 'No hay observaciones registradas para esta gestión.';
                         console.log('⚠️ [Observaciones] Comentarios vacíos, usando mensaje por defecto');
                     }
-                    
+
                     contenido.innerHTML = `
                         <div class="observaciones-detalle">
                             <div class="observaciones-info">
@@ -1683,7 +1696,7 @@
                             </div>
                         </div>
                     `;
-                    
+
                     console.log('✅ [Observaciones] Modal actualizado con datos de la gestión');
                 } else {
                     console.error('❌ [Observaciones] ERROR: Datos no válidos. Message:', data.message);
@@ -1725,7 +1738,7 @@
         }
 
         // Función helper para escapar HTML (global)
-        window.escapeHtml = function(text) {
+        window.escapeHtml = function (text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
@@ -1738,32 +1751,32 @@
         async function actualizarHistorialCliente() {
             try {
                 // Obtener el ID del cliente actual
-                const clienteId = document.getElementById('inputClienteId')?.value || 
-                                 document.querySelector('input[name="cliente_id"]')?.value;
-                
+                const clienteId = document.getElementById('inputClienteId')?.value ||
+                    document.querySelector('input[name="cliente_id"]')?.value;
+
                 if (!clienteId) {
                     console.warn('⚠️ [Historial] No se encontró ID de cliente para actualizar historial');
                     return;
                 }
-                
+
                 console.log('🔄 [Historial] Actualizando historial del cliente:', clienteId);
-                
+
                 // Obtener historial usando el endpoint del controlador
                 const response = await fetch(`index.php?action=obtener_historial_cliente&id=${encodeURIComponent(clienteId)}`);
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status} ${response.statusText}`);
                 }
-                
+
                 const contentType = response.headers.get('content-type') || '';
                 if (!contentType.includes('application/json')) {
                     const text = await response.text();
                     console.error('❌ [Historial] Respuesta no es JSON:', text.substring(0, 200));
                     return;
                 }
-                
+
                 const data = await response.json();
-                
+
                 if (data.success && data.historial) {
                     // Usar la función renderHistorialLlamadas de asesor-gestionar.js si está disponible
                     if (typeof window.renderHistorialLlamadas === 'function') {
@@ -1792,7 +1805,7 @@
                 console.error('❌ [Historial] No se encontró el contenedor #historialLlamadasLista');
                 return;
             }
-            
+
             if (!Array.isArray(historial) || historial.length === 0) {
                 container.innerHTML = `
                     <div class="historial-vacio">
@@ -1802,12 +1815,12 @@
                 `;
                 return;
             }
-            
+
             const formatearPesos = (valor) => {
                 if (!valor || valor === 0) return 'N/A';
                 return '$' + Number(valor).toLocaleString('es-CO');
             };
-            
+
             container.innerHTML = `
                 <table class="historial-table">
                     <thead>
@@ -1820,36 +1833,36 @@
                     </thead>
                     <tbody>
                         ${historial.map((g) => {
-                            const fecha = g.fecha_gestion || '';
-                            let fechaFormateada = 'N/A';
-                            if (fecha) {
-                                try {
-                                    const fechaObj = new Date(fecha);
-                                    if (!isNaN(fechaObj.getTime())) {
-                                        fechaFormateada = fechaObj.toLocaleDateString('es-CO', {
-                                            day: '2-digit',
-                                            month: '2-digit',
-                                            year: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                        });
-                                    }
-                                } catch (e) {
-                                    fechaFormateada = fecha;
-                                }
-                            }
-                            const asesor = g.asesor_nombre || 'N/A';
-                            const tipificacion = g.tipificacion_completa || g.resultado || g.tipo_gestion || 'N/A';
-                            const gestionId = g.id || 0;
-                            
-                            // Verificar si es acuerdo de pago
-                            const esAcuerdoPago = (g.resultado === '03') || (tipificacion.includes('ACUERDO DE PAGO'));
-                            const numeroObligacion = g.numero_obligacion || '';
-                            const valorAcuerdo = g.valor_acuerdo || null;
-                            const valorCuota = g.valor_cuota || null;
-                            const numeroCuota = g.numero_cuota || null;
-                            
-                            return `
+                const fecha = g.fecha_gestion || '';
+                let fechaFormateada = 'N/A';
+                if (fecha) {
+                    try {
+                        const fechaObj = new Date(fecha);
+                        if (!isNaN(fechaObj.getTime())) {
+                            fechaFormateada = fechaObj.toLocaleDateString('es-CO', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                    } catch (e) {
+                        fechaFormateada = fecha;
+                    }
+                }
+                const asesor = g.asesor_nombre || 'N/A';
+                const tipificacion = g.tipificacion_completa || g.resultado || g.tipo_gestion || 'N/A';
+                const gestionId = g.id || 0;
+
+                // Verificar si es acuerdo de pago
+                const esAcuerdoPago = (g.resultado === '03') || (tipificacion.includes('ACUERDO DE PAGO'));
+                const numeroObligacion = g.numero_obligacion || '';
+                const valorAcuerdo = g.valor_acuerdo || null;
+                const valorCuota = g.valor_cuota || null;
+                const numeroCuota = g.numero_cuota || null;
+
+                return `
                                 <tr>
                                     <td>
                                         <i class="fas fa-calendar-alt"></i>
@@ -1900,7 +1913,7 @@
                                     </td>
                                 </tr>
                             `;
-                        }).join('')}
+            }).join('')}
                     </tbody>
                 </table>
             `;
@@ -1912,7 +1925,7 @@
          */
         async function cerrarSesionPBX(targetUrl = null) {
             console.log('📴 [PBX] Cerrando sesión del PBX...');
-            
+
             if (window.webrtcSoftphone && typeof window.webrtcSoftphone.disconnect === 'function') {
                 try {
                     // Cerrar llamada activa si existe
@@ -1922,11 +1935,11 @@
                         // Esperar un momento para que la llamada se cierre
                         await new Promise(resolve => setTimeout(resolve, 500));
                     }
-                    
+
                     // Desconectar del PBX
                     window.webrtcSoftphone.disconnect();
                     console.log('✅ [PBX] Sesión del PBX cerrada correctamente');
-                    
+
                     // Esperar un momento para que el unregister se complete
                     await new Promise(resolve => setTimeout(resolve, 300));
                 } catch (error) {
@@ -1935,7 +1948,7 @@
             } else {
                 console.log('ℹ️ [PBX] No hay sesión del PBX activa para cerrar');
             }
-            
+
             // Si hay URL de destino, navegar después de cerrar la sesión
             if (targetUrl) {
                 window.location.href = targetUrl;
@@ -1947,52 +1960,52 @@
          */
         function setupPBXLogout() {
             // Interceptar clics en enlaces del navbar
-            document.addEventListener('click', function(event) {
+            document.addEventListener('click', function (event) {
                 const link = event.target.closest('a');
                 if (!link) return;
-                
+
                 const href = link.getAttribute('href');
                 if (!href) return;
-                
+
                 // Ignorar enlaces que no son del navbar o que son la misma página
                 if (!link.closest('.top-navbar')) return;
-                
+
                 // Ignorar enlaces que no cambian de página (hash, javascript, etc.)
                 if (href.startsWith('#') || href.startsWith('javascript:') || href === '') return;
-                
+
                 // Ignorar si es la página actual (gestionar_cliente)
                 const currentUrl = window.location.href;
                 if (href.includes('gestionar_cliente') && currentUrl.includes('gestionar_cliente')) {
                     return;
                 }
-                
+
                 // Interceptar el clic
                 event.preventDefault();
                 console.log('🔗 [PBX] Navegación detectada a:', href);
-                
+
                 // Cerrar sesión del PBX antes de navegar
                 cerrarSesionPBX(href);
             }, true); // Usar capture phase para interceptar antes que otros handlers
-            
+
             // Interceptar clic en botón de logout
-            document.addEventListener('click', function(event) {
+            document.addEventListener('click', function (event) {
                 const link = event.target.closest('a.logout-btn');
                 if (!link) return;
-                
+
                 const href = link.getAttribute('href');
                 if (href && href.includes('logout')) {
                     event.preventDefault();
                     console.log('🚪 [PBX] Logout detectado, cerrando sesión del PBX...');
-                    
+
                     // Cerrar sesión del PBX antes de hacer logout
                     cerrarSesionPBX(href);
                 }
             }, true);
-            
+
             // Interceptar cierre de pestaña/ventana
-            window.addEventListener('beforeunload', function(event) {
+            window.addEventListener('beforeunload', function (event) {
                 console.log('📴 [PBX] Página cerrando, cerrando sesión del PBX...');
-                
+
                 // Cerrar sesión del PBX de forma síncrona (no podemos usar async aquí)
                 if (window.webrtcSoftphone && typeof window.webrtcSoftphone.disconnect === 'function') {
                     try {
@@ -2000,7 +2013,7 @@
                         if (window.webrtcSoftphone.currentCall) {
                             window.webrtcSoftphone.hangup();
                         }
-                        
+
                         // Desconectar
                         window.webrtcSoftphone.disconnect();
                         console.log('✅ [PBX] Sesión del PBX cerrada antes de cerrar la página');
@@ -2009,7 +2022,7 @@
                     }
                 }
             });
-            
+
             console.log('✅ [PBX] Listeners de cierre de sesión configurados');
         }
 
@@ -2027,17 +2040,17 @@
         window.cerrarSesionPBX = cerrarSesionPBX;
 
         // Guardar tipificación SIN RECARGAR LA PÁGINA (para mantener la llamada activa)
-        document.getElementById('tipificacionForm')?.addEventListener('submit', async function(e) {
+        document.getElementById('tipificacionForm')?.addEventListener('submit', async function (e) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             console.log('💾 [Formulario] Guardando tipificación sin recargar página...');
-            
+
             // Detener cronómetro y obtener duración
             if (typeof detenerCronometroGestion === 'function') {
                 const duracionSegundos = detenerCronometroGestion();
                 const duracionMinutos = duracionSegundos > 0 ? (duracionSegundos / 60) : 0;
-                
+
                 // Guardar duración en el campo hidden
                 const duracionInput = document.getElementById('duracion_llamada_hidden');
                 if (duracionInput) {
@@ -2045,7 +2058,7 @@
                     console.log('⏱️ [Formulario] Duración de gestión:', duracionMinutos.toFixed(2), 'minutos (', duracionSegundos, 'segundos)');
                 }
             }
-            
+
             // Verificar si hay llamada activa
             let hayLlamada = false;
             if (window.webrtcSoftphone && window.webrtcSoftphone.currentCall) {
@@ -2053,38 +2066,38 @@
                 const state = call.state;
                 const stateStr = String(state);
                 hayLlamada = stateStr === 'Established' || stateStr === '4' || state === 'Established';
-                
+
                 if (hayLlamada) {
                     console.log('📞 [Formulario] Hay llamada activa - Guardando sin recargar para mantener la llamada');
                 }
             }
-            
+
             // Validación adicional: Si es acuerdo de pago, verificar que la obligación no sea "ninguna"
             const subTipificacion = document.getElementById('sub_tipificacion_hidden').value;
             const obligacionId = document.getElementById('obligacion_seleccionada').value;
-            
+
             if (subTipificacion === '03') {
                 if (!obligacionId || obligacionId === 'ninguna' || obligacionId === '') {
                     alert('Para registrar un acuerdo de pago, debe seleccionar una obligación.');
                     return;
                 }
             }
-            
+
             const formData = new FormData(this);
             const btnGuardar = document.getElementById('btnGuardarPrincipal');
-            
+
             // Deshabilitar botón mientras se guarda
             if (btnGuardar) {
                 btnGuardar.disabled = true;
                 btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
             }
-            
+
             try {
                 const response = await fetch('index.php?action=guardar_tipificacion', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 // Verificar Content-Type
                 const contentType = response.headers.get('content-type') || '';
                 if (!contentType.includes('application/json')) {
@@ -2092,18 +2105,18 @@
                     console.error('❌ [Formulario] Respuesta no es JSON:', text.substring(0, 200));
                     throw new Error('La respuesta del servidor no es válida. Por favor, recarga la página.');
                 }
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     console.log('✅ [Formulario] Gestión guardada exitosamente');
-                    
+
                     // Mostrar mensaje de éxito
                     alert('Gestión guardada exitosamente');
-                    
+
                     // Actualizar el historial dinámicamente después de guardar
                     await actualizarHistorialCliente();
-                    
+
                     // NUNCA recargar la página si hay llamada activa
                     if (hayLlamada) {
                         console.log('📞 [Formulario] Llamada activa detectada - NO recargando página');
@@ -2141,4 +2154,5 @@
         });
     </script>
 </body>
+
 </html>
