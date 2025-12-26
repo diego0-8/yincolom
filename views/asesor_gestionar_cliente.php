@@ -573,7 +573,7 @@
             }
 
             // Llamar desde WebRTC
-            function llamarDesdeWebRTC(numero) {
+            async function llamarDesdeWebRTC(numero) {
                 if (!window.webrtcSoftphone) {
                     console.error('❌ [Softphone] No está inicializado');
                     alert('El softphone no está disponible. Por favor, espera a que se conecte.');
@@ -596,23 +596,28 @@
 
                 console.log('📞 [Llamar] Iniciando llamada al número:', numeroLimpio);
 
-                // Usar callNumber() que establece el número y luego llama automáticamente
-                if (typeof window.webrtcSoftphone.callNumber === 'function') {
-                    window.webrtcSoftphone.callNumber(numeroLimpio);
-                    console.log('✅ [Llamar] Llamada iniciada correctamente');
-                } else {
-                    // Fallback: establecer número y luego llamar
-                    if (typeof window.webrtcSoftphone.setNumber === 'function') {
+                try {
+                    // Usar callNumber() que establece el número y luego llama automáticamente
+                    if (typeof window.webrtcSoftphone.callNumber === 'function') {
+                        await window.webrtcSoftphone.callNumber(numeroLimpio);
+                        console.log('✅ [Llamar] Llamada iniciada correctamente');
+                    } else if (typeof window.webrtcSoftphone.setNumber === 'function' && typeof window.webrtcSoftphone.makeCall === 'function') {
+                        // Fallback: establecer número y luego llamar
                         window.webrtcSoftphone.setNumber(numeroLimpio);
-                        setTimeout(() => {
-                            if (typeof window.webrtcSoftphone.makeCall === 'function') {
-                                window.webrtcSoftphone.makeCall();
-                            }
-                        }, 100);
+                        await window.webrtcSoftphone.makeCall();
+                        console.log('✅ [Llamar] Llamada iniciada usando setNumber + makeCall');
                     } else {
-                        console.error('❌ [Llamar] Métodos callNumber o setNumber no disponibles');
-                        alert('Error: No se pudo iniciar la llamada. Por favor, intenta nuevamente.');
+                        // Último fallback: establecer currentNumber directamente
+                        window.webrtcSoftphone.currentNumber = numeroLimpio;
+                        if (typeof window.webrtcSoftphone._updateNumberDisplay === 'function') {
+                            window.webrtcSoftphone._updateNumberDisplay();
+                        }
+                        await window.webrtcSoftphone.makeCall();
+                        console.log('✅ [Llamar] Llamada iniciada usando currentNumber directo');
                     }
+                } catch (error) {
+                    console.error('❌ [Llamar] Error al iniciar llamada:', error);
+                    alert('Error al iniciar la llamada: ' + (error.message || 'Error desconocido'));
                 }
             }
 
@@ -1012,6 +1017,57 @@
             }
         }
 
+        /**
+         * Verifica si el softphone está registrado y listo para hacer llamadas
+         * @returns {boolean} true si está registrado, false si no
+         */
+        function verificarSoftphoneRegistrado() {
+            if (!window.webrtcSoftphone) {
+                return false;
+            }
+
+            // Verificar estado del registerer (método correcto)
+            if (window.webrtcSoftphone.registerer) {
+                const regState = window.webrtcSoftphone.registerer.state;
+                // Verificar si está registrado usando el estado del registerer
+                // SIP.RegistererState.Registered = 2
+                if (regState === 2 || regState === 'Registered' || regState === SIP?.RegistererState?.Registered) {
+                    return true;
+                }
+            }
+
+            // Verificar también el status del softphone como fallback
+            if (window.webrtcSoftphone.status === 'connected') {
+                return true;
+            }
+
+            return false;
+        }
+
+        /**
+         * Espera a que el softphone esté registrado antes de hacer la llamada
+         * @param {string} numero - Número a llamar
+         * @param {number} intentos - Número de intentos realizados
+         * @param {number} maxIntentos - Máximo número de intentos
+         */
+        async function esperarRegistroYLLamar(numero, intentos = 0, maxIntentos = 20) {
+            if (verificarSoftphoneRegistrado()) {
+                console.log('✅ [Llamar] Softphone registrado, iniciando llamada...');
+                llamarDesdeWebRTC(numero);
+                return;
+            }
+
+            if (intentos >= maxIntentos) {
+                alert('El softphone no se ha conectado al servidor después de varios intentos. Por favor, verifica tu conexión y recarga la página.');
+                return;
+            }
+
+            // Esperar 250ms antes de intentar de nuevo
+            await new Promise(resolve => setTimeout(resolve, 250));
+            console.log(`⏳ [Llamar] Esperando registro del softphone... (intento ${intentos + 1}/${maxIntentos})`);
+            esperarRegistroYLLamar(numero, intentos + 1, maxIntentos);
+        }
+
         function iniciarLlamadaDesdeTelefonoSeleccionado() {
             const select = document.getElementById('telefonoSelect');
             if (!select) {
@@ -1033,12 +1089,6 @@
                 return;
             }
 
-            // Verificar que esté registrado
-            if (!window.webrtcSoftphone.isRegistered) {
-                alert('El softphone no está conectado al servidor. Por favor, espera a que se conecte.');
-                return;
-            }
-
             // Verificar que no haya una llamada activa
             if (window.webrtcSoftphone.currentCall) {
                 const call = window.webrtcSoftphone.currentCall;
@@ -1054,14 +1104,21 @@
                     window.webrtcSoftphone.hangup();
                     // Esperar un momento antes de iniciar la nueva llamada
                     setTimeout(() => {
-                        llamarDesdeWebRTC(numero);
+                        esperarRegistroYLLamar(numero);
                     }, 500);
                     return;
                 }
             }
 
-            // Iniciar la llamada
-            llamarDesdeWebRTC(numero);
+            // Verificar registro y esperar si es necesario
+            if (verificarSoftphoneRegistrado()) {
+                // Ya está registrado, hacer la llamada directamente
+                llamarDesdeWebRTC(numero);
+            } else {
+                // No está registrado aún, esperar a que se registre
+                console.log('⏳ [Llamar] Softphone no registrado aún, esperando registro...');
+                esperarRegistroYLLamar(numero);
+            }
         }
 
         function actualizarTelefonoSeleccionado() {

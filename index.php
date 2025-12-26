@@ -61,6 +61,7 @@ $apiActions = [
     'agregar_informacion_cliente',
     'get_telefono_data',
     'buscar_cliente',
+    'buscar_cliente_asesor',
     'get_clientes_carga',
     'get_asesores_disponibles_carga',
     'get_bases_asignadas_asesor',
