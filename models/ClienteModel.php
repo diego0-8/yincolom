@@ -952,7 +952,10 @@ class ClienteModel {
      * @return int ID de la asignación creada
      */
     public function createTemporaryAsignacion($asesorId, $clienteId) {
-        $this->pdo->beginTransaction();
+        $manejaTransaccion = !$this->pdo->inTransaction();
+        if ($manejaTransaccion) {
+            $this->pdo->beginTransaction();
+        }
         try {
             // Crear registro en asignaciones_clientes
             $sql = "INSERT INTO asignaciones_clientes (asesor_id, cliente_id, estado, fecha_asignacion) 
@@ -967,13 +970,29 @@ class ClienteModel {
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([$asesorId, $clienteId]);
             
-            $this->pdo->commit();
+            if ($manejaTransaccion && $this->pdo->inTransaction()) {
+                $this->pdo->commit();
+            }
             return $asignacionId;
         } catch (Exception $e) {
-            $this->pdo->rollBack();
+            if ($manejaTransaccion && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             error_log("Error al crear asignación temporal: " . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * Obtiene o crea la asignación entre un asesor y un cliente.
+     */
+    public function ensureAsignacionClienteAsesor($asesorId, $clienteId) {
+        $asignacionId = $this->getAsignacionId($asesorId, $clienteId);
+        if ($asignacionId) {
+            return $asignacionId;
+        }
+
+        return $this->createTemporaryAsignacion($asesorId, $clienteId);
     }
     
     /**

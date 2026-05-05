@@ -351,33 +351,43 @@ class TareaModel {
 
         // Campos mínimos para el buscador del navbar
         // Nota: incluimos nombre_cargue para mostrar la base
-        $baseSelect = "SELECT c.id, c.nombre, c.cedula, c.telefono, c.celular2, c.email, c.direccion, ce.nombre_cargue
+        // Incluimos tabla obligaciones para poder buscar también por número de obligación.
+        $baseSelect = "SELECT DISTINCT c.id, c.nombre, c.cedula, c.telefono, c.celular2, c.email, c.direccion, ce.nombre_cargue
                        FROM clientes c
                        JOIN cargas_excel ce ON c.carga_excel_id = ce.id
+                       LEFT JOIN obligaciones o ON o.cliente_id = c.id
                        WHERE c.carga_excel_id IN ($placeholders)";
 
         $params = $cargaIds;
 
+        $like = '%' . $termino . '%';
+
         if ($criterio === 'cedula') {
             // Si viene numérico, permitir también coincidencia por teléfonos/celulares para mejorar experiencia
             if ($isNumeric) {
-                $baseSelect .= " AND (c.cedula LIKE ? OR c.telefono LIKE ? OR c.celular2 LIKE ?)";
-                $like = '%' . $termino . '%';
+                $baseSelect .= " AND (c.cedula LIKE ? OR c.telefono LIKE ? OR c.celular2 LIKE ? OR o.obligacion LIKE ?)";
+                $params[] = $like;
                 $params[] = $like;
                 $params[] = $like;
                 $params[] = $like;
             } else {
-                $baseSelect .= " AND c.cedula LIKE ?";
-                $params[] = '%' . $termino . '%';
+                $baseSelect .= " AND (c.cedula LIKE ? OR o.obligacion LIKE ? OR c.telefono LIKE ? OR c.celular2 LIKE ?)";
+                $params[] = $like;
+                $params[] = $like;
+                $params[] = $like;
+                $params[] = $like;
             }
         } elseif ($criterio === 'telefono') {
-            $like = '%' . $termino . '%';
-            $baseSelect .= " AND (c.telefono LIKE ? OR c.celular2 LIKE ?)";
+            $baseSelect .= " AND (c.telefono LIKE ? OR c.celular2 LIKE ? OR o.obligacion LIKE ?)";
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
         } else { // nombre
-            $baseSelect .= " AND c.nombre LIKE ?";
-            $params[] = '%' . $termino . '%';
+            $baseSelect .= " AND (c.nombre LIKE ? OR c.telefono LIKE ? OR c.celular2 LIKE ? OR o.obligacion LIKE ?)";
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
         }
 
         $baseSelect .= " ORDER BY c.nombre ASC LIMIT $limit";

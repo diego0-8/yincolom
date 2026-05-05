@@ -4,6 +4,7 @@ require_once 'models/ActividadProductoModel.php';
 
 class GestionModel {
     private $pdo;
+    private $columnasHistorialGestion = [];
 
     public function __construct($pdo) {
         $this->pdo = $pdo;
@@ -11,23 +12,27 @@ class GestionModel {
 
     public function getGestionByAsesorAndCliente($asesorId, $clienteId) {
         // Obtener historial completo del cliente visible para todos los asesores con acceso a la base
-        $sql = "SELECT hg.id, hg.fecha_gestion, hg.tipo_gestion, hg.resultado, hg.comentarios, 
+        $sql = "SELECT hg.id, hg.fecha_gestion, hg.fecha_gestion_origen,
+                       COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion) as fecha_gestion_mostrar,
+                       hg.tipo_gestion, hg.resultado, hg.comentarios, 
                        hg.monto_venta, hg.duracion_llamada, hg.edad, hg.num_personas, 
                        hg.valor_cotizacion, hg.whatsapp_enviado, hg.proxima_fecha, 
                        hg.forma_contacto, hg.obligacion_id, hg.producto_gestionado, 
                        hg.monto_obligacion, hg.numero_obligacion, hg.no_cuotas, 
                        hg.fecha_pago, hg.valor_cuota, hg.numero_cuota, hg.valor_acuerdo,
-                       u.nombre_completo as asesor_nombre, u.id as asesor_id
+                       u.nombre_completo as asesor_nombre, u.id as asesor_id,
+                       ce.nombre_cargue as base
                 FROM historial_gestion hg 
                 JOIN asignaciones_clientes ac ON hg.asignacion_id = ac.id 
                 JOIN usuarios u ON ac.asesor_id = u.id
                 JOIN clientes c ON ac.cliente_id = c.id
+                LEFT JOIN cargas_excel ce ON c.carga_excel_id = ce.id
                 WHERE ac.cliente_id = ? 
                 AND EXISTS (
                     SELECT 1 FROM asignaciones_base_asesor aba 
                     WHERE aba.asesor_id = ? AND aba.carga_id = c.carga_excel_id AND aba.estado = 'activa'
                 )
-                ORDER BY hg.fecha_gestion DESC";
+                ORDER BY COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion) DESC";
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([$clienteId, $asesorId]);
         $gestiones = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -78,7 +83,7 @@ class GestionModel {
      * Crea una gestión (método legacy con múltiples parámetros)
      * MEJORADO: Manejo robusto de errores para evitar error 520
      */
-    public function createGestion($asignacionId, $tipo, $comentarios, $resultado = null, $monto = null, $duracion = null, $edad = null, $numPersonas = null, $valorCotizacion = null, $whatsappEnviado = null, $formaContacto = 'llamada', $obligacionId = null, $productoGestionado = null, $montoObligacion = null, $numeroObligacion = null, $noCuotas = null, $fechaPago = null, $valorCuota = null, $numeroCuota = null, $valorAcuerdo = null) {
+    public function createGestion($asignacionId, $tipo, $comentarios, $resultado = null, $monto = null, $duracion = null, $edad = null, $numPersonas = null, $valorCotizacion = null, $whatsappEnviado = null, $formaContacto = 'llamada', $obligacionId = null, $productoGestionado = null, $montoObligacion = null, $numeroObligacion = null, $noCuotas = null, $fechaPago = null, $valorCuota = null, $numeroCuota = null, $valorAcuerdo = null, $telefonoContacto = null) {
         try {
             // Convertir parámetros a array para usar crearGestion()
             $gestionData = [
@@ -101,7 +106,8 @@ class GestionModel {
                 'fecha_pago' => $fechaPago,
                 'valor_cuota' => $valorCuota,
                 'numero_cuota' => $numeroCuota,
-                'valor_acuerdo' => $valorAcuerdo
+                'valor_acuerdo' => $valorAcuerdo,
+                'telefono_contacto' => $telefonoContacto
             ];
             
             // Usar el método mejorado crearGestion()
@@ -211,7 +217,10 @@ class GestionModel {
      */
     public function getGestionById($gestionId) {
         try {
-            $sql = "SELECT * FROM historial_gestion WHERE id = ?";
+            $sql = "SELECT hg.*,
+                           COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion) as fecha_gestion_mostrar
+                    FROM historial_gestion hg
+                    WHERE hg.id = ?";
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([$gestionId]);
             return $stmt->fetch(PDO::FETCH_ASSOC);
@@ -867,7 +876,8 @@ class GestionModel {
      * CORREGIDO para usar la estructura real de la tabla historial_gestion
      */
     public function getGestionFiltrada($coordinadorId, $fechaInicio, $fechaFin, $asesorId = null, $resultado = null, $tipoGestion = null) {
-        $sql = "SELECT hg.*, c.nombre as cliente_nombre, c.cedula, c.telefono, c.celular2,
+        $sql = "SELECT hg.*, COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion) as fecha_gestion_mostrar,
+                       c.nombre as cliente_nombre, c.cedula, c.telefono, c.celular2,
                        u.nombre_completo as asesor_nombre, ac.estado as estado_asignacion
                 FROM historial_gestion hg 
                 JOIN asignaciones_clientes ac ON hg.asignacion_id = ac.id
@@ -875,7 +885,7 @@ class GestionModel {
                 JOIN usuarios u ON ac.asesor_id = u.id 
                 JOIN asignaciones_asesor_coordinador aac ON ac.asesor_id = aac.asesor_id
                 WHERE aac.coordinador_id = ? 
-                AND DATE(hg.fecha_gestion) BETWEEN ? AND ?";
+                AND DATE(COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion)) BETWEEN ? AND ?";
         
         $params = [$coordinadorId, $fechaInicio, $fechaFin];
         
@@ -894,7 +904,7 @@ class GestionModel {
             $params[] = $tipoGestion;
         }
         
-        $sql .= " ORDER BY hg.fecha_gestion DESC";
+        $sql .= " ORDER BY COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion) DESC";
         
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
@@ -913,17 +923,42 @@ class GestionModel {
                 throw new Exception("Campos obligatorios faltantes para crear la gestión");
             }
             
-            // Iniciar transacción para asegurar consistencia
-            $this->pdo->beginTransaction();
-            
-            // Usar solo los campos que realmente existen en la tabla historial_gestion
+            $manejaTransaccion = !$this->pdo->inTransaction();
+            if ($manejaTransaccion) {
+                $this->pdo->beginTransaction();
+            }
+
+            $usarFechaGestionOrigen = $this->tablaHistorialGestionTieneColumna('fecha_gestion_origen');
+            $usarTelefonoContacto = $this->tablaHistorialGestionTieneColumna('telefono_contacto');
             $sql = "INSERT INTO historial_gestion (
                         asignacion_id, fecha_gestion, tipo_gestion, comentarios, resultado,
                         monto_venta, duracion_llamada, edad, num_personas, 
                         valor_cotizacion, whatsapp_enviado, proxima_fecha, forma_contacto,
                         obligacion_id, producto_gestionado, monto_obligacion, numero_obligacion,
-                        no_cuotas, fecha_pago, valor_cuota, numero_cuota, valor_total, valor_acuerdo
-                    ) VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        no_cuotas, fecha_pago, valor_cuota, numero_cuota, valor_total, valor_acuerdo";
+
+            if ($usarFechaGestionOrigen) {
+                $sql .= ", fecha_gestion_origen";
+            }
+
+            if ($usarTelefonoContacto) {
+                $sql .= ", telefono_contacto";
+            }
+
+            // Valores: fecha_gestion se inserta con NOW(), por eso no hay placeholder para esa columna.
+            // Para las 21 columnas fijas restantes hay 21 placeholders, y el primer '?' es asignacion_id.
+            $placeholdersFijos = implode(', ', array_fill(0, 21, '?'));
+            $sql .= ") VALUES (?, NOW(), " . $placeholdersFijos;
+
+            // Orden de placeholders debe coincidir con el orden en $params
+            if ($usarFechaGestionOrigen) {
+                $sql .= ", ?";
+            }
+            if ($usarTelefonoContacto) {
+                $sql .= ", ?";
+            }
+
+            $sql .= ")";
             
             $stmt = $this->pdo->prepare($sql);
             
@@ -952,20 +987,30 @@ class GestionModel {
                 $gestionData['valor_total'] ?? null,
                 $gestionData['valor_acuerdo'] ?? null
             ];
+
+            if ($usarFechaGestionOrigen) {
+                $params[] = $gestionData['fecha_gestion_origen'] ?? null;
+            }
+
+            if ($usarTelefonoContacto) {
+                $params[] = $gestionData['telefono_contacto'] ?? null;
+            }
             
             // Ejecutar la consulta
             $success = $stmt->execute($params);
             
             if (!$success) {
-                $this->pdo->rollBack();
+                if ($manejaTransaccion && $this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
                 throw new Exception("Error al ejecutar la consulta SQL");
             }
             
             $historialGestionId = $this->pdo->lastInsertId();
             
-            // Confirmar transacción PRIMERO (antes de registrar actividades)
-            // Esto asegura que la gestión se guarde incluso si falla el registro de actividades
-            $this->pdo->commit();
+            if ($manejaTransaccion && $this->pdo->inTransaction()) {
+                $this->pdo->commit();
+            }
             
             // Registrar actividad automáticamente FUERA de la transacción
             // Si falla, no afecta la gestión principal
@@ -982,8 +1027,10 @@ class GestionModel {
             
         } catch (PDOException $e) {
             // Rollback si la transacción está activa
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
+            if ($manejaTransaccion ?? false) {
+                if ($this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
             }
             error_log("Error PDO en crearGestion: " . $e->getMessage());
             error_log("SQL State: " . $e->getCode());
@@ -991,13 +1038,40 @@ class GestionModel {
             throw new Exception("Error al guardar la gestión: " . $e->getMessage());
         } catch (Exception $e) {
             // Rollback si la transacción está activa
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
+            if ($manejaTransaccion ?? false) {
+                if ($this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
             }
             error_log("Error en crearGestion: " . $e->getMessage());
             error_log("Stack trace: " . $e->getTraceAsString());
             error_log("Datos recibidos: " . json_encode($gestionData));
             throw $e;
+        }
+    }
+
+    public function tablaHistorialGestionTieneColumna($nombreColumna) {
+        if (array_key_exists($nombreColumna, $this->columnasHistorialGestion)) {
+            return $this->columnasHistorialGestion[$nombreColumna];
+        }
+
+        try {
+            // Evitar SHOW COLUMNS con placeholders: en algunos MariaDB/PDO (prepared nativo) da error de sintaxis cerca de '?'
+            $sql = "SELECT 1
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'historial_gestion'
+                      AND COLUMN_NAME = ?
+                    LIMIT 1";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$nombreColumna]);
+            $existe = $stmt->fetchColumn() !== false;
+            $this->columnasHistorialGestion[$nombreColumna] = $existe;
+            return $existe;
+        } catch (Exception $e) {
+            error_log("Error consultando columna de historial_gestion: " . $e->getMessage());
+            $this->columnasHistorialGestion[$nombreColumna] = false;
+            return false;
         }
     }
 
@@ -1503,13 +1577,30 @@ class GestionModel {
      */
     public function getHistorialCompletoParaExportacion($asesorId, $fechaInicio = null, $fechaFin = null) {
         try {
+            $usarFechaGestionOrigen = $this->tablaHistorialGestionTieneColumna('fecha_gestion_origen');
+
+            if ($usarFechaGestionOrigen) {
+                $fechaOrigenSelect = "hg.fecha_gestion_origen,
+                        COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion) as fecha_gestion_mostrar,";
+                $filtroFecha = " AND DATE(COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion)) BETWEEN ? AND ?";
+                $ordenFecha = " ORDER BY COALESCE(hg.fecha_gestion_origen, hg.fecha_gestion) DESC";
+            } else {
+                // Mantener compatibilidad: si no existe la columna origen, usamos fecha_gestion como fallback.
+                $fechaOrigenSelect = "NULL as fecha_gestion_origen,
+                        hg.fecha_gestion as fecha_gestion_mostrar,";
+                $filtroFecha = " AND DATE(hg.fecha_gestion) BETWEEN ? AND ?";
+                $ordenFecha = " ORDER BY hg.fecha_gestion DESC";
+            }
+
             $sql = "SELECT 
                         hg.id,
                         hg.fecha_gestion,
+                        {$fechaOrigenSelect}
                         hg.tipo_gestion,
                         hg.resultado,
                         hg.comentarios,
                         hg.forma_contacto,
+                        hg.telefono_contacto,
                         hg.proxima_fecha,
                         hg.obligacion_id,
                         hg.numero_obligacion,
@@ -1525,8 +1616,9 @@ class GestionModel {
                         o.producto as producto_obligacion,
                         c.nombre as cliente_nombre,
                         c.cedula,
-                        c.telefono as celular_cliente,
-                        c.celular2,
+                        c.telefono as cel1_cliente,
+                        c.celular2 as cel2_cliente,
+                        c.cel3 as cel3_cliente,
                         u.nombre_completo as asesor_nombre,
                         ce.nombre_cargue as base_datos_nombre,
                         ac.estado as estado_asignacion
@@ -1542,13 +1634,13 @@ class GestionModel {
             
             // Filtro de fechas si se especifican
             if ($fechaInicio && $fechaFin) {
-                $sql .= " AND DATE(hg.fecha_gestion) BETWEEN ? AND ?";
+                $sql .= $filtroFecha;
                 $params[] = $fechaInicio;
                 $params[] = $fechaFin;
             }
             
-            // Ordenar por fecha de gestión
-            $sql .= " ORDER BY hg.fecha_gestion DESC";
+            // Ordenar por fecha de gestión efectiva
+            $sql .= $ordenFecha;
             
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute($params);

@@ -278,6 +278,32 @@ class UsuarioModel {
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    /**
+     * Busca un asesor activo por nombre con normalización básica.
+     */
+    public function findAsesorByNombre($nombreAsesor) {
+        $nombreNormalizado = $this->normalizarTextoComparacion($nombreAsesor);
+        if ($nombreNormalizado === '') {
+            return false;
+        }
+
+        $asesores = $this->getAsesores();
+        foreach ($asesores as $asesor) {
+            if ($this->normalizarTextoComparacion($asesor['nombre_completo'] ?? '') === $nombreNormalizado) {
+                return $asesor;
+            }
+        }
+
+        foreach ($asesores as $asesor) {
+            $nombreActual = $this->normalizarTextoComparacion($asesor['nombre_completo'] ?? '');
+            if ($nombreActual !== '' && (strpos($nombreActual, $nombreNormalizado) !== false || strpos($nombreNormalizado, $nombreActual) !== false)) {
+                return $asesor;
+            }
+        }
+
+        return false;
+    }
     
     /**
      * Obtiene los asesores asignados a un coordinador específico
@@ -385,6 +411,29 @@ class UsuarioModel {
         $stmt->execute([$coordinadorId]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result['total'] > 0;
+    }
+
+    private function normalizarTextoComparacion($texto) {
+        $texto = trim((string)$texto);
+        if ($texto === '') {
+            return '';
+        }
+
+        if (function_exists('mb_strtolower')) {
+            $texto = mb_strtolower($texto, 'UTF-8');
+        } else {
+            $texto = strtolower($texto);
+        }
+
+        if (function_exists('iconv')) {
+            $textoConvertido = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $texto);
+            if ($textoConvertido !== false) {
+                $texto = $textoConvertido;
+            }
+        }
+
+        $texto = preg_replace('/[^a-z0-9]+/', ' ', $texto);
+        return trim(preg_replace('/\s+/', ' ', $texto));
     }
 }
 ?>

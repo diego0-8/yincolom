@@ -12,6 +12,15 @@ class CargaExcelModel {
     }
 
     /**
+     * Obtiene una carga por su ID.
+     */
+    public function getCargaById($cargaId) {
+        $stmt = $this->pdo->prepare("SELECT ce.*, u.nombre_completo as coordinador_nombre FROM cargas_excel ce JOIN usuarios u ON ce.usuario_coordinador_id = u.id WHERE ce.id = ? LIMIT 1");
+        $stmt->execute([$cargaId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
      * Obtiene solo las cargas del coordinador específico
      */
     public function getCargasByCoordinador($coordinadorId, $soloHabilitadas = true) {

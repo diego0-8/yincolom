@@ -89,6 +89,16 @@ class ObligacionModel {
         $stmt->execute([$obligacion]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+
+    /**
+     * Obtiene una obligación por número restringida a un cliente específico.
+     */
+    public function getObligacionByNumeroAndClienteId($obligacion, $clienteId) {
+        $sql = "SELECT * FROM obligaciones WHERE obligacion = ? AND cliente_id = ? LIMIT 1";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$obligacion, $clienteId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
     
     /**
      * Verificar si una obligación ya existe
