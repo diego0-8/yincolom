@@ -1310,6 +1310,7 @@ class CoordinadorController extends BaseController {
                 'Asesor',
                 'Cédula del Cliente',
                 'Nombre del Cliente',
+                'Teléfono contacto',
                 'Celular del Cliente',
                 'Nombre de la Base de Clientes',
                 'Tipo de Contacto',
@@ -1379,6 +1380,7 @@ class CoordinadorController extends BaseController {
             'Asesor',
             'Cédula del Cliente',
             'Nombre del Cliente',
+            'Teléfono contacto',
             'Celular del Cliente',
             'Nombre de la Base de Clientes',
             'Tipo de Contacto',
@@ -1409,7 +1411,7 @@ class CoordinadorController extends BaseController {
             }
             
             $row = [
-                $this->limpiarDatoCSV($gestion['fecha_gestion']),
+                $this->limpiarDatoCSV($gestion['fecha_gestion_mostrar'] ?? $gestion['fecha_gestion']),
                 $this->limpiarDatoCSV($gestion['asesor_nombre'] ?? 'No asignado'),
                 $this->limpiarDatoCSV($gestion['cedula']),
                 $this->limpiarDatoCSV($gestion['cliente_nombre']),
@@ -1511,13 +1513,18 @@ class CoordinadorController extends BaseController {
                 'Asesor',
                 'Cédula del Cliente',
                 'Nombre del Cliente',
-                'Celular del Cliente',
+                'Teléfono contacto',
+                'Cel1',
+                'Cel2',
+                'Cel3',
                 'Nombre de la Base de Clientes',
                 'Tipo de Contacto',
                 'Tipificación 2 Nivel',
                 'Tipificación 3 Nivel',
+                'Obligación/Producto a Gestionar:',
                 'Observaciones',
                 'Canales Autorizados',
+                'Duración de Gestión',
                 'Valor Total (Producto)',
                 'Valor del Acuerdo (Acuerdo de Pago)',
                 'Total Cuotas (Acuerdo de Pago)',
@@ -1527,26 +1534,11 @@ class CoordinadorController extends BaseController {
             ];
             fputcsv($output, $headers);
             
-            // Agregar mensaje de que no hay asesores
-            $row = [
-                'No hay asesores asignados para exportar',
-                'Período: ' . $fechaInicio . ' a ' . $fechaFin,
-                'Estado: Sin asesores asignados',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                ''
-            ];
+            // Agregar mensaje de que no hay asesores (misma cantidad de columnas que $headers)
+            $row = array_fill(0, count($headers), '');
+            $row[0] = 'No hay asesores asignados para exportar';
+            $row[1] = 'Período: ' . $fechaInicio . ' a ' . $fechaFin;
+            $row[2] = 'Estado: Sin asesores asignados';
             fputcsv($output, $row);
             
             fclose($output);
@@ -1578,7 +1570,10 @@ class CoordinadorController extends BaseController {
             'Asesor',
             'Cédula del Cliente',
             'Nombre del Cliente',
-            'Celular del Cliente',
+            'Teléfono contacto',
+            'Cel1',
+            'Cel2',
+            'Cel3',
             'Nombre de la Base de Clientes',
             'Tipo de Contacto',
             'Tipificación 2 Nivel',
@@ -1606,8 +1601,8 @@ class CoordinadorController extends BaseController {
         
         // Ordenar todas las gestiones por fecha y hora de la más reciente a la más antigua
         usort($todasLasGestiones, function($a, $b) {
-            $fechaA = strtotime($a['fecha_gestion']);
-            $fechaB = strtotime($b['fecha_gestion']);
+            $fechaA = strtotime($a['fecha_gestion_mostrar'] ?? ($a['fecha_gestion'] ?? ''));
+            $fechaB = strtotime($b['fecha_gestion_mostrar'] ?? ($b['fecha_gestion'] ?? ''));
             return $fechaB - $fechaA; // Orden descendente (más reciente primero)
         });
         
@@ -1617,11 +1612,14 @@ class CoordinadorController extends BaseController {
             $duracionGestion = $this->formatearDuracionHHMMSS($gestion['duracion_llamada'] ?? null);
             
             $row = [
-                $this->limpiarDatoCSV($gestion['fecha_gestion']),
+                $this->limpiarDatoCSV($gestion['fecha_gestion_mostrar'] ?? ($gestion['fecha_gestion'] ?? null)),
                 $this->limpiarDatoCSV($gestion['asesor_nombre'] ?? 'No asignado'),
                 $this->limpiarDatoCSV($gestion['cedula']),
                 $this->limpiarDatoCSV($gestion['cliente_nombre']),
-                $this->limpiarDatoCSV($gestion['celular_cliente']),
+                $this->limpiarDatoCSV($gestion['telefono_contacto'] ?? ''),
+                $this->limpiarDatoCSV($gestion['cel1_cliente'] ?? ''),
+                $this->limpiarDatoCSV($gestion['cel2_cliente'] ?? ''),
+                $this->limpiarDatoCSV($gestion['cel3_cliente'] ?? ''),
                 $this->limpiarDatoCSV($gestion['base_datos_nombre'] ?? 'No especificada'),
                 $this->limpiarDatoCSV($gestion['forma_contacto'] ?? 'llamada'),
                 $this->limpiarDatoCSV($gestion['tipificacion_2_nivel']),
@@ -1745,7 +1743,7 @@ class CoordinadorController extends BaseController {
         // Datos filtrados con orden correcto
         foreach ($gestiones as $gestion) {
             $row = [
-                $this->limpiarDatoCSV($gestion['fecha_gestion']),
+                $this->limpiarDatoCSV($gestion['fecha_gestion_mostrar'] ?? ($gestion['fecha_gestion'] ?? null)),
                 $this->limpiarDatoCSV($gestion['asesor_nombre'] ?? 'No asignado'),
                 $this->limpiarDatoCSV($gestion['cedula']),
                 $this->limpiarDatoCSV($gestion['cliente_nombre']),

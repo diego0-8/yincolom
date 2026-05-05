@@ -395,6 +395,7 @@ class AsesorController extends BaseController
 
             $sub_tipificacion = $_POST['sub_tipificacion'];
             $comentarios = $_POST['comentarios'];
+            $telefonoContacto = $_POST['telefono_contacto'] ?? null;
 
             // Determinar el tipo de gestión basado en la tipificación
             $tipo_gestion = 'Llamada de Venta'; // Por defecto
@@ -512,7 +513,9 @@ class AsesorController extends BaseController
                 $noCuotas,
                 $fechaPago,
                 $valorCuota,
-                $numeroCuota
+                $numeroCuota,
+                null, // valor_acuerdo (no aplica en este flujo)
+                $telefonoContacto
             );
 
             if ($gestionId) {
@@ -663,13 +666,20 @@ class AsesorController extends BaseController
             // Obtener historial de gestiones
             $historial = $this->gestionModel->getGestionByAsesorAndCliente($asesorId, $clienteId);
 
-            // Preparar respuesta
+            // Preparar respuesta (incluir todos los campos de teléfono)
             $clienteData = [
                 'id' => $cliente['id'],
                 'nombre' => $cliente['nombre'],
                 'cedula' => $cliente['cedula'],
-                'telefono' => $cliente['telefono'],
-                'celular2' => $cliente['celular2'],
+                'telefono' => $cliente['telefono'] ?? null,
+                'celular2' => $cliente['celular2'] ?? null,
+                'cel3' => $cliente['cel3'] ?? null,
+                'cel4' => $cliente['cel4'] ?? null,
+                'cel5' => $cliente['cel5'] ?? null,
+                'cel6' => $cliente['cel6'] ?? null,
+                'cel7' => $cliente['cel7'] ?? null,
+                'cel8' => $cliente['cel8'] ?? null,
+                'cel9' => $cliente['cel9'] ?? null,
                 'email' => $cliente['email'],
                 'direccion' => $cliente['direccion'],
                 'ciudad' => $cliente['ciudad'],
@@ -996,6 +1006,7 @@ class AsesorController extends BaseController
 
             // Obtener datos del formulario
             $formaContacto = $_POST['forma_contacto'] ?? 'llamada';
+            $telefonoContacto = $_POST['telefono_contacto'] ?? null;
 
             // Procesar canales autorizados (pueden venir como array indexado o no indexado)
             $canalesAutorizados = [];
@@ -1164,7 +1175,8 @@ class AsesorController extends BaseController
                 $gestionData['fecha_pago'],
                 $gestionData['valor_cuota'],
                 $gestionData['numero_cuota'],
-                $gestionData['valor_acuerdo']
+                $gestionData['valor_acuerdo'],
+                $telefonoContacto
             );
 
             error_log("Gestion creada con ID: {$gestionId}");
@@ -1427,7 +1439,9 @@ class AsesorController extends BaseController
             exit;
         }
 
-        $clientes = $this->tareaModel->buscarClienteEnBasesAsignadas($asesorId, $cedula);
+        // Usar el mismo motor de búsqueda que ya soporta coincidencia por cédula/teléfono/nombre
+        // y ahora también por número de obligación (tabla obligaciones).
+        $clientes = $this->tareaModel->buscarClientesEnBasesAsignadasPorTermino($asesorId, $cedula, 'auto', 50);
 
         echo json_encode([
             'success' => true,
@@ -1925,9 +1939,15 @@ class AsesorController extends BaseController
             error_log("agregarInformacionCliente - Datos a actualizar: " . print_r($datosActualizar, true));
 
             // Agregar teléfonos (sin eliminar los existentes)
+            // CRÍTICO: NO reemplazar el campo 'telefono' si ya tiene valor
+            // Solo agregar números nuevos en campos vacíos (celular2, cel3, cel4, etc.)
+            
             $telefonoActual = trim($cliente['telefono'] ?? '');
-            $celular2Actual = trim($cliente['celular2'] ?? '');
-
+            
+            // Lista de campos de teléfono disponibles (en orden de prioridad)
+            // NOTA: 'telefono' NO se incluye porque NO debe ser reemplazado
+            $camposTelefono = ['celular2', 'cel3', 'cel4', 'cel5', 'cel6', 'cel7', 'cel8', 'cel9'];
+            
             // Si hay teléfonos nuevos, agregarlos
             if (!empty($telefonos)) {
                 // Filtrar teléfonos vacíos y limpiar espacios
@@ -1937,40 +1957,32 @@ class AsesorController extends BaseController
 
                 if (!empty($telefonosLimpios)) {
                     $telefonosArray = array_values($telefonosLimpios); // Reindexar array
-
-                    // Prioridad: llenar campos vacíos primero
-                    if (empty($telefonoActual)) {
-                        // Si telefono está vacío, usar el primer teléfono nuevo
-                        $datosActualizar['telefono'] = $telefonosArray[0];
-
-                        // Si hay más teléfonos y celular2 está vacío, usar el segundo
-                        if (count($telefonosArray) > 1 && empty($celular2Actual)) {
-                            $datosActualizar['celular2'] = $telefonosArray[1];
-                        } elseif (count($telefonosArray) > 1) {
-                            // Si celular2 ya tiene valor, reemplazarlo con el nuevo (o concatenar)
-                            // Por ahora, reemplazamos para que se guarden los nuevos teléfonos
-                            $datosActualizar['celular2'] = $telefonosArray[1];
+                    $indiceTelefono = 0; // Índice para recorrer los teléfonos nuevos
+                    
+                    // Recorrer los campos de teléfono disponibles
+                    foreach ($camposTelefono as $campo) {
+                        // Si ya procesamos todos los teléfonos nuevos, salir
+                        if ($indiceTelefono >= count($telefonosArray)) {
+                            break;
                         }
-                    } elseif (empty($celular2Actual)) {
-                        // Si telefono tiene valor pero celular2 está vacío, usar el primer teléfono nuevo
-                        $datosActualizar['celular2'] = $telefonosArray[0];
-
-                        // Si hay más teléfonos, actualizar también telefono con el nuevo
-                        // (esto permite actualizar ambos campos si se proporcionan múltiples teléfonos)
-                        if (count($telefonosArray) > 1) {
-                            $datosActualizar['telefono'] = $telefonosArray[1];
+                        
+                        // Obtener el valor actual del campo
+                        $valorActual = trim($cliente[$campo] ?? '');
+                        
+                        // Si el campo está vacío, agregar el siguiente teléfono nuevo
+                        if (empty($valorActual)) {
+                            $datosActualizar[$campo] = $telefonosArray[$indiceTelefono];
+                            $indiceTelefono++;
+                            
+                            error_log("agregarInformacionCliente - Agregando teléfono '{$telefonosArray[$indiceTelefono-1]}' en campo '{$campo}'");
                         }
-                    } else {
-                        // Si ambos campos ya tienen valores, reemplazar con los nuevos teléfonos
-                        // Esto permite actualizar los teléfonos existentes
-                        $datosActualizar['telefono'] = $telefonosArray[0];
-                        if (count($telefonosArray) > 1) {
-                            $datosActualizar['celular2'] = $telefonosArray[1];
-                        } else {
-                            // Si solo hay un teléfono nuevo, reemplazar telefono y dejar celular2 como está
-                            // O reemplazar celular2 si el usuario quiere
-                            $datosActualizar['celular2'] = $telefonosArray[0];
-                        }
+                    }
+                    
+                    // Si quedan teléfonos sin agregar (todos los campos están llenos)
+                    if ($indiceTelefono < count($telefonosArray)) {
+                        $telefonosNoAgregados = count($telefonosArray) - $indiceTelefono;
+                        error_log("agregarInformacionCliente - ⚠️ Advertencia: {$telefonosNoAgregados} teléfono(s) no se pudieron agregar porque todos los campos están llenos");
+                        // No lanzar excepción, solo loguear la advertencia
                     }
                 }
             }
